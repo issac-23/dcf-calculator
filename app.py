@@ -220,15 +220,15 @@ st.markdown("### Free cash flow projection")
 table = pd.DataFrame(
     {
         "Year": [f"Year {p.year}" for p in result.projections],
-        "Revenue": [p.revenue for p in result.projections],
-        "EBIT": [p.ebit for p in result.projections],
-        "NOPAT": [p.nopat for p in result.projections],
-        "+ D&A": [p.da for p in result.projections],
-        "− Capex": [-p.capex for p in result.projections],
-        "− ΔWC": [-p.delta_wc for p in result.projections],
-        "FCF": [p.fcf for p in result.projections],
+        "Revenue": [_format_money(p.revenue) for p in result.projections],
+        "EBIT": [_format_money(p.ebit) for p in result.projections],
+        "NOPAT": [_format_money(p.nopat) for p in result.projections],
+        "+ D&A": [_format_money(p.da) for p in result.projections],
+        "− Capex": [_format_money(-p.capex) for p in result.projections],
+        "− ΔWC": [_format_money(-p.delta_wc) for p in result.projections],
+        "FCF": [_format_money(p.fcf) for p in result.projections],
         "Discount factor": [p.discount_factor for p in result.projections],
-        "PV(FCF)": [p.pv_fcf for p in result.projections],
+        "PV(FCF)": [_format_money(p.pv_fcf) for p in result.projections],
     }
 )
 
@@ -237,15 +237,7 @@ st.dataframe(
     hide_index=True,
     use_container_width=True,
     column_config={
-        "Revenue": st.column_config.NumberColumn(format="$%.0f"),
-        "EBIT": st.column_config.NumberColumn(format="$%.0f"),
-        "NOPAT": st.column_config.NumberColumn(format="$%.0f"),
-        "+ D&A": st.column_config.NumberColumn(format="$%.0f"),
-        "− Capex": st.column_config.NumberColumn(format="$%.0f"),
-        "− ΔWC": st.column_config.NumberColumn(format="$%.0f"),
-        "FCF": st.column_config.NumberColumn(format="$%.0f"),
         "Discount factor": st.column_config.NumberColumn(format="%.4f"),
-        "PV(FCF)": st.column_config.NumberColumn(format="$%.0f"),
     },
 )
 
