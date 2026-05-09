@@ -2,17 +2,76 @@
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 
 from dcf import DCFInputs, run_dcf
 from dcf.data import CompanyData, DataFetchError, fetch_company_data
+from dcf.engine import sensitivity_grid
 
 st.set_page_config(
     page_title="DCF Calculator",
     page_icon="$",
     layout="wide",
     initial_sidebar_state="expanded",
+)
+
+# ----- styling -------------------------------------------------------------
+
+st.markdown(
+    """
+    <style>
+    .block-container {
+        padding-top: 2rem;
+        padding-bottom: 3rem;
+        max-width: 1400px;
+    }
+    #MainMenu, footer, header [data-testid="stToolbar"] {
+        visibility: hidden;
+    }
+    h1 {
+        font-size: 2rem !important;
+        font-weight: 600 !important;
+        letter-spacing: -0.02em;
+    }
+    h2, h3 {
+        font-weight: 600 !important;
+        letter-spacing: -0.01em;
+    }
+    [data-testid="stMetric"] {
+        background: #15181c;
+        padding: 1rem 1.25rem;
+        border-radius: 10px;
+        border: 1px solid #23262c;
+    }
+    [data-testid="stMetricValue"] {
+        font-size: 1.6rem !important;
+        font-weight: 600 !important;
+    }
+    [data-testid="stMetricLabel"] {
+        opacity: 0.65;
+    }
+    div[data-testid="stMetricDelta"] {
+        font-size: 0.85rem !important;
+    }
+    .stPlotlyChart {
+        background: transparent;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# Shared Plotly layout for the dark theme
+_PLOT_LAYOUT = dict(
+    paper_bgcolor="rgba(0,0,0,0)",
+    plot_bgcolor="rgba(0,0,0,0)",
+    font=dict(color="#e6e8eb", family="sans-serif"),
+    margin=dict(l=10, r=10, t=40, b=10),
+    xaxis=dict(gridcolor="#23262c", zerolinecolor="#23262c"),
+    yaxis=dict(gridcolor="#23262c", zerolinecolor="#23262c"),
 )
 
 
@@ -253,3 +312,109 @@ st.caption(
     f"{result.pv_terminal_value / result.enterprise_value * 100:.0f}% of enterprise value — "
     f"the higher this share, the more your valuation depends on assumptions about the distant future."
 )
+
+
+# ----- FCF chart -----------------------------------------------------------
+
+st.markdown("### Cash flow visualization")
+
+years = [f"Year {p.year}" for p in result.projections]
+fcfs = [p.fcf for p in result.projections]
+pv_fcfs = [p.pv_fcf for p in result.projections]
+
+fcf_fig = go.Figure()
+fcf_fig.add_bar(
+    x=years,
+    y=fcfs,
+    name="Undiscounted FCF",
+    marker_color="#1f3a5f",
+    hovertemplate="%{x}<br>FCF: $%{y:,.0f}<extra></extra>",
+)
+fcf_fig.add_bar(
+    x=years,
+    y=pv_fcfs,
+    name="Present value",
+    marker_color="#3b82f6",
+    hovertemplate="%{x}<br>PV: $%{y:,.0f}<extra></extra>",
+)
+fcf_fig.update_layout(
+    barmode="overlay",
+    bargap=0.25,
+    title=dict(text="Free cash flow vs. present value", font=dict(size=14)),
+    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    height=320,
+    **_PLOT_LAYOUT,
+)
+fcf_fig.update_traces(opacity=0.95)
+st.plotly_chart(fcf_fig, use_container_width=True)
+
+
+# ----- sensitivity heatmap -------------------------------------------------
+
+st.markdown("### Sensitivity analysis")
+st.caption(
+    "Fair value per share across a grid of WACC and terminal growth assumptions. "
+    "If small moves change the answer drastically, your valuation is fragile."
+)
+
+wacc_grid = np.round(np.arange(max(0.04, wacc / 100 - 0.025), wacc / 100 + 0.026, 0.005), 4)
+g_grid = np.round(np.arange(0.0, 0.041, 0.005), 4)
+grid = sensitivity_grid(inputs, list(wacc_grid), list(g_grid))
+
+heatmap_z = np.array(grid)
+text = np.where(
+    np.isnan(heatmap_z),
+    "—",
+    np.vectorize(lambda v: f"${v:,.0f}" if not np.isnan(v) else "—")(heatmap_z),
+)
+
+heatmap = go.Figure(
+    data=go.Heatmap(
+        z=heatmap_z,
+        x=[f"{g * 100:.1f}%" for g in g_grid],
+        y=[f"{w * 100:.2f}%" for w in wacc_grid],
+        text=text,
+        texttemplate="%{text}",
+        textfont=dict(size=11),
+        colorscale="Blues",
+        showscale=False,
+        hovertemplate="WACC %{y} · g %{x}<br>Fair value: %{text}<extra></extra>",
+    )
+)
+heatmap.update_layout(
+    title=dict(text="Fair value per share (WACC × terminal growth)", font=dict(size=14)),
+    xaxis=dict(title="Terminal growth", side="top"),
+    yaxis=dict(title="WACC", autorange="reversed"),
+    height=380,
+    **{k: v for k, v in _PLOT_LAYOUT.items() if k not in ("xaxis", "yaxis")},
+)
+st.plotly_chart(heatmap, use_container_width=True)
+
+
+# ----- methodology expander ------------------------------------------------
+
+with st.expander("Methodology"):
+    st.markdown(
+        """
+**Two-stage discounted cash flow.** Free cash flow to the firm (FCFF) is
+projected explicitly for the next *N* years using assumptions on the left.
+Beyond year *N*, a Gordon Growth terminal value captures all remaining cash
+flows in perpetuity. Everything is discounted to today at the weighted
+average cost of capital.
+
+```
+FCFF_t  = NOPAT_t + D&A_t − Capex_t − ΔWC_t
+NOPAT_t = Revenue_t × operating margin × (1 − tax rate)
+EV      = Σ FCFF_t / (1 + WACC)^t  +  TV / (1 + WACC)^N
+TV      = FCFF_{N+1} / (WACC − g_terminal)
+Equity  = EV − net debt
+Price   = Equity / shares outstanding
+```
+
+**Limitations.** DCFs are unreliable for banks (no meaningful FCF — those
+are flagged at load), REITs (use FFO/NAV instead), and very early-stage
+companies (no historical signal). Even where the model applies, terminal
+value typically dominates enterprise value, so the answer is sensitive to
+small changes in WACC and terminal growth — see the sensitivity grid above.
+        """
+    )
