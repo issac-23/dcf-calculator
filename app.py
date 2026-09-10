@@ -9,7 +9,7 @@ import streamlit as st
 
 from dcf import DCFInputs, run_dcf
 from dcf.data import CompanyData, DataFetchError, fetch_company_data
-from dcf.engine import sensitivity_grid
+from dcf.engine import implied_revenue_growth, sensitivity_grid
 
 st.set_page_config(
     page_title="DCF Calculator",
@@ -347,6 +347,65 @@ fcf_fig.update_layout(
 )
 fcf_fig.update_traces(opacity=0.95)
 st.plotly_chart(fcf_fig, use_container_width=True)
+
+
+# ----- reverse DCF ---------------------------------------------------------
+
+if company.current_price and company.current_price > 0:
+    st.markdown("### Reverse DCF")
+    st.caption(
+        "Instead of asking *what is this stock worth?*, ask *what growth rate "
+        "would the market need to see to justify the current price?* All other "
+        "assumptions above are held fixed."
+    )
+
+    implied = implied_revenue_growth(inputs, company.current_price)
+
+    r1, r2, r3 = st.columns(3)
+    r1.metric("Current price", f"${company.current_price:,.2f}")
+    if implied is None:
+        r2.metric("Implied revenue growth", "—")
+        r3.metric("Your assumption", f"{revenue_growth:.1f}%")
+        st.caption(
+            "No revenue growth rate between −50% and +100% reproduces the current "
+            "price under the other assumptions. Try adjusting margin, WACC, or "
+            "terminal growth."
+        )
+    else:
+        implied_pct = implied * 100
+        delta = implied_pct - revenue_growth
+        r2.metric(
+            "Implied revenue growth",
+            f"{implied_pct:.1f}%",
+            f"{delta:+.1f} pp vs. your assumption",
+            delta_color="off",
+        )
+        hist = company.historical_revenue_growth
+        if hist is not None:
+            r3.metric("Historical (4-yr avg)", f"{hist * 100:.1f}%")
+        else:
+            r3.metric("Your assumption", f"{revenue_growth:.1f}%")
+
+        if hist is not None:
+            gap = implied_pct - hist * 100
+            if gap > 5:
+                interp = (
+                    f"The market is pricing in growth **{gap:.1f} pp above** the "
+                    "4-year historical average — an optimistic take that assumes "
+                    "the business accelerates."
+                )
+            elif gap < -5:
+                interp = (
+                    f"The market is pricing in growth **{abs(gap):.1f} pp below** "
+                    "the 4-year historical average — a pessimistic take that "
+                    "assumes the business decelerates."
+                )
+            else:
+                interp = (
+                    "The market's implied growth is roughly in line with the "
+                    "4-year historical average."
+                )
+            st.caption(interp)
 
 
 # ----- sensitivity heatmap -------------------------------------------------
