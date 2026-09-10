@@ -154,6 +154,74 @@ def run_dcf(inputs: DCFInputs) -> DCFResult:
     )
 
 
+def implied_revenue_growth(
+    inputs: DCFInputs,
+    target_price: float,
+    *,
+    lo: float = -0.5,
+    hi: float = 1.0,
+    tol: float = 1e-4,
+    max_iter: int = 100,
+) -> float | None:
+    """Reverse DCF: solve for the revenue growth rate that produces target_price.
+
+    Holds every other assumption in ``inputs`` fixed and searches revenue_growth
+    over ``[lo, hi]`` by bisection. Returns None if the target price lies
+    outside the fair-value range reachable within those bounds.
+
+    Fair value per share is monotonic in revenue_growth, but not always
+    *increasing*: when each incremental dollar of revenue destroys cash
+    (roughly, when operating_margin * (1 - tax) + da_pct - capex_pct is
+    negative), growing faster burns more cash and fair value falls with growth.
+    We therefore read the direction off the bracket endpoints instead of
+    assuming it. Without this, an unprofitable company passes the bracket check
+    and then bisects the wrong way, converging on a confidently wrong answer.
+    """
+    if inputs.shares_outstanding <= 0 or inputs.revenue_base <= 0:
+        return None
+
+    def price_at(g: float) -> float:
+        modified = DCFInputs(
+            revenue_base=inputs.revenue_base,
+            shares_outstanding=inputs.shares_outstanding,
+            net_debt=inputs.net_debt,
+            revenue_growth=g,
+            operating_margin=inputs.operating_margin,
+            tax_rate=inputs.tax_rate,
+            capex_pct=inputs.capex_pct,
+            da_pct=inputs.da_pct,
+            wc_pct=inputs.wc_pct,
+            terminal_growth=inputs.terminal_growth,
+            wacc=inputs.wacc,
+            projection_years=inputs.projection_years,
+        )
+        return run_dcf(modified).fair_value_per_share
+
+    p_lo = price_at(lo)
+    p_hi = price_at(hi)
+    if not (min(p_lo, p_hi) <= target_price <= max(p_lo, p_hi)):
+        return None
+
+    # Flat over the whole bracket: no growth rate is more "implied" than any
+    # other, so there is no meaningful answer to report.
+    if abs(p_hi - p_lo) < tol:
+        return None
+
+    increasing = p_hi > p_lo
+
+    for _ in range(max_iter):
+        mid = 0.5 * (lo + hi)
+        p_mid = price_at(mid)
+        if abs(p_mid - target_price) < tol:
+            return mid
+        # Move the endpoint whose side of target_price the midpoint landed on.
+        if (p_mid < target_price) == increasing:
+            lo = mid
+        else:
+            hi = mid
+    return 0.5 * (lo + hi)
+
+
 def sensitivity_grid(
     inputs: DCFInputs,
     wacc_range: List[float],
