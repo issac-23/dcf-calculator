@@ -9,7 +9,7 @@ import math
 import pytest
 
 from dcf import DCFInputs, run_dcf
-from dcf.engine import sensitivity_grid
+from dcf.engine import implied_revenue_growth, sensitivity_grid
 
 
 def _base_inputs(**overrides) -> DCFInputs:
@@ -224,3 +224,63 @@ def test_sensitivity_grid_handles_invalid_combinations():
     inputs = _base_inputs()
     grid = sensitivity_grid(inputs, [0.04], [0.05])
     assert math.isnan(grid[0][0])
+
+
+# ----- Reverse DCF ----------------------------------------------------------
+
+
+def test_implied_growth_round_trips_to_forward_dcf():
+    # Forward: at growth=0.10 the base case fair value is 29.5715.
+    # Reverse: given that price, we should recover ~0.10.
+    inputs = _base_inputs()
+    forward_price = run_dcf(inputs).fair_value_per_share
+    implied = implied_revenue_growth(inputs, forward_price)
+    assert implied is not None
+    assert implied == pytest.approx(0.10, abs=0.001)
+
+
+def test_implied_growth_higher_target_price_implies_higher_growth():
+    inputs = _base_inputs()
+    base_price = run_dcf(inputs).fair_value_per_share
+    lower = implied_revenue_growth(inputs, base_price * 0.8)
+    higher = implied_revenue_growth(inputs, base_price * 1.2)
+    assert lower is not None and higher is not None
+    assert higher > lower
+
+
+def test_implied_growth_returns_none_for_unreachable_price():
+    inputs = _base_inputs()
+    # A price so high no revenue_growth within [-0.5, 1.0] can reach it.
+    assert implied_revenue_growth(inputs, 1e12) is None
+
+
+def test_implied_growth_round_trips_when_growth_destroys_value():
+    """With a negative operating margin, fair value *falls* as growth rises.
+
+    Bisection must read that direction off the bracket rather than assume
+    fair value increases with growth, or it converges on the wrong endpoint.
+    """
+    inputs = _base_inputs(operating_margin=-0.10)
+
+    # Confirm the premise: this configuration is monotonically decreasing.
+    assert run_dcf(_base_inputs(operating_margin=-0.10, revenue_growth=0.5)) \
+        .fair_value_per_share < run_dcf(
+            _base_inputs(operating_margin=-0.10, revenue_growth=0.0)
+        ).fair_value_per_share
+
+    target = run_dcf(_base_inputs(operating_margin=-0.10, revenue_growth=0.30)) \
+        .fair_value_per_share
+    implied = implied_revenue_growth(inputs, target)
+    assert implied is not None
+    assert implied == pytest.approx(0.30, abs=0.001)
+
+
+def test_implied_growth_returns_none_when_price_is_flat_in_growth():
+    """No sensitivity to growth means no implied growth rate to report."""
+    # NOPAT + D&A - capex nets to zero per dollar of revenue, and no working
+    # capital drag, so fair value is identical at every growth rate.
+    inputs = _base_inputs(
+        operating_margin=0.0, tax_rate=0.0, da_pct=0.05, capex_pct=0.05, wc_pct=0.0
+    )
+    flat_price = run_dcf(inputs).fair_value_per_share
+    assert implied_revenue_growth(inputs, flat_price) is None
