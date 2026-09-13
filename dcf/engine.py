@@ -13,7 +13,7 @@ The model is a standard intermediate two-stage DCF:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import List
 
 
@@ -181,21 +181,7 @@ def implied_revenue_growth(
         return None
 
     def price_at(g: float) -> float:
-        modified = DCFInputs(
-            revenue_base=inputs.revenue_base,
-            shares_outstanding=inputs.shares_outstanding,
-            net_debt=inputs.net_debt,
-            revenue_growth=g,
-            operating_margin=inputs.operating_margin,
-            tax_rate=inputs.tax_rate,
-            capex_pct=inputs.capex_pct,
-            da_pct=inputs.da_pct,
-            wc_pct=inputs.wc_pct,
-            terminal_growth=inputs.terminal_growth,
-            wacc=inputs.wacc,
-            projection_years=inputs.projection_years,
-        )
-        return run_dcf(modified).fair_value_per_share
+        return run_dcf(replace(inputs, revenue_growth=g)).fair_value_per_share
 
     p_lo = price_at(lo)
     p_hi = price_at(hi)
@@ -227,28 +213,19 @@ def sensitivity_grid(
     wacc_range: List[float],
     terminal_growth_range: List[float],
 ) -> List[List[float]]:
-    """Return a 2D grid of fair_value_per_share over (wacc x terminal_growth)."""
-    grid: List[List[float]] = []
-    for w in wacc_range:
-        row: List[float] = []
-        for g in terminal_growth_range:
-            try:
-                modified = DCFInputs(
-                    revenue_base=inputs.revenue_base,
-                    shares_outstanding=inputs.shares_outstanding,
-                    net_debt=inputs.net_debt,
-                    revenue_growth=inputs.revenue_growth,
-                    operating_margin=inputs.operating_margin,
-                    tax_rate=inputs.tax_rate,
-                    capex_pct=inputs.capex_pct,
-                    da_pct=inputs.da_pct,
-                    wc_pct=inputs.wc_pct,
-                    terminal_growth=g,
-                    wacc=w,
-                    projection_years=inputs.projection_years,
-                )
-                row.append(run_dcf(modified).fair_value_per_share)
-            except ValueError:
-                row.append(float("nan"))
-        grid.append(row)
-    return grid
+    """Return a 2D grid of fair_value_per_share over (wacc x terminal_growth).
+
+    Pairs the model rejects -- terminal growth at or above WACC, which makes
+    the perpetuity infinite -- come back as NaN so the caller can render a gap
+    instead of a number.
+    """
+
+    def cell(w: float, g: float) -> float:
+        try:
+            return run_dcf(
+                replace(inputs, wacc=w, terminal_growth=g)
+            ).fair_value_per_share
+        except ValueError:
+            return float("nan")
+
+    return [[cell(w, g) for g in terminal_growth_range] for w in wacc_range]
