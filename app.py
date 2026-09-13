@@ -122,7 +122,7 @@ with st.sidebar:
         label_visibility="collapsed",
         placeholder="AAPL",
     ).strip().upper()
-    load_clicked = st.button("Load financials", use_container_width=True, type="primary")
+    load_clicked = st.button("Load financials", width="stretch", type="primary")
 
 
 # ----- main ----------------------------------------------------------------
@@ -294,7 +294,7 @@ table = pd.DataFrame(
 st.dataframe(
     table,
     hide_index=True,
-    use_container_width=True,
+    width="stretch",
     column_config={
         "Discount factor": st.column_config.NumberColumn(format="%.4f"),
     },
@@ -346,7 +346,7 @@ fcf_fig.update_layout(
     **_PLOT_LAYOUT,
 )
 fcf_fig.update_traces(opacity=0.95)
-st.plotly_chart(fcf_fig, use_container_width=True)
+st.plotly_chart(fcf_fig, width="stretch")
 
 
 # ----- reverse DCF ---------------------------------------------------------
@@ -447,7 +447,7 @@ heatmap.update_layout(
     height=380,
     **{k: v for k, v in _PLOT_LAYOUT.items() if k not in ("xaxis", "yaxis")},
 )
-st.plotly_chart(heatmap, use_container_width=True)
+st.plotly_chart(heatmap, width="stretch")
 
 
 # ----- methodology expander ------------------------------------------------
