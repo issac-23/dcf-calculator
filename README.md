@@ -5,7 +5,7 @@ financials from Yahoo Finance, runs an intermediate two-stage DCF, and reports
 fair value per share alongside a full year-by-year projection and a WACC ×
 terminal-growth sensitivity table.
 
-Live: _coming soon (Streamlit Community Cloud)_
+Live: https://dcf-calculator-issac.streamlit.app
 
 ## Run locally
 
@@ -16,9 +16,15 @@ streamlit run app.py
 
 ## Run tests
 
+Tests need pytest, which is not a runtime dependency:
+
 ```bash
+pip install -r requirements-dev.txt
 pytest
 ```
+
+The suite never touches the network. `dcf/data.py` takes any object satisfying
+the `_TickerLike` protocol, so tests inject a fake in place of `yfinance.Ticker`.
 
 ## Model
 
