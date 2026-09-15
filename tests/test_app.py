@@ -18,12 +18,16 @@ state to get past that.
 
 from __future__ import annotations
 
-import pytest
+from pathlib import Path
+
 from streamlit.testing.v1 import AppTest
 
 from dcf.data import CompanyData
 
-APP = "app.py"
+# AppTest resolves a relative path against the file that calls from_file(),
+# not the working directory, so "app.py" would look for tests/app.py. Build an
+# absolute path instead -- that holds regardless of where pytest is invoked.
+APP = str(Path(__file__).resolve().parent.parent / "app.py")
 
 
 def _fake_company(**overrides) -> CompanyData:
