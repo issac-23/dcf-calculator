@@ -1,9 +1,15 @@
 # DCF Calculator
 
+[![tests](https://github.com/issac-23/dcf-calculator/actions/workflows/tests.yml/badge.svg)](https://github.com/issac-23/dcf-calculator/actions/workflows/tests.yml)
+
 A discounted cash flow valuation tool for public equities. Pulls real
-financials from Yahoo Finance, runs an intermediate two-stage DCF, and reports
-fair value per share alongside a full year-by-year projection and a WACC ×
-terminal-growth sensitivity table.
+financials from Yahoo Finance, runs a two-stage DCF, and reports fair value
+per share alongside a full year-by-year projection and a WACC × terminal-growth
+sensitivity table.
+
+It also runs in reverse: given the current market price, it solves for the
+revenue growth rate that would justify it, then compares that against what the
+company has actually delivered historically.
 
 Live: https://dcf-calculator-issac.streamlit.app
 
