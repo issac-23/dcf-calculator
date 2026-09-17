@@ -37,6 +37,14 @@ class CompanyData:
     shares_outstanding: float
     net_debt: float
 
+    # CAPM inputs. Optional because a derived WACC is a bonus, not a
+    # precondition -- a missing beta should cost you the derivation, not the
+    # whole valuation.
+    beta: Optional[float]
+    market_cap: Optional[float]
+    total_debt: Optional[float]
+    interest_expense: Optional[float]
+
     historical_revenue_growth: Optional[float]
     historical_operating_margin: Optional[float]
     historical_tax_rate: Optional[float]
@@ -109,6 +117,16 @@ def build_company_data(symbol: str, tk: _TickerLike) -> CompanyData:
     total_cash = _coerce_float(info.get("totalCash"), default=0.0) or 0.0
     net_debt = total_debt - total_cash
 
+    # "Interest Expense" is the headline line; the non-operating variant is
+    # the fallback because some filings only break it out that way.
+    interest_expense = _latest_row(financials, "Interest Expense")
+    if interest_expense is None:
+        interest_expense = _latest_row(financials, "Interest Expense Non Operating")
+    if interest_expense is not None:
+        # Reported as a positive cost on the income statement, but flip a
+        # negative just in case, since yfinance is inconsistent about signs.
+        interest_expense = abs(interest_expense)
+
     hist = _historical_averages(financials, cashflow)
 
     warnings: List[str] = []
@@ -134,6 +152,10 @@ def build_company_data(symbol: str, tk: _TickerLike) -> CompanyData:
         revenue_base=revenue_base,
         shares_outstanding=shares_outstanding,
         net_debt=net_debt,
+        beta=_coerce_float(info.get("beta")),
+        market_cap=_coerce_float(info.get("marketCap")),
+        total_debt=total_debt,
+        interest_expense=interest_expense,
         historical_revenue_growth=hist["revenue_growth"],
         historical_operating_margin=hist["operating_margin"],
         historical_tax_rate=hist["tax_rate"],
@@ -143,6 +165,40 @@ def build_company_data(symbol: str, tk: _TickerLike) -> CompanyData:
         is_dcf_inappropriate=is_inappropriate,
         warnings=warnings,
     )
+
+
+# The 10-year Treasury is the conventional risk-free proxy for a US equity
+# DCF: long enough to match the horizon of a perpetuity, liquid enough to
+# trust the quote.
+_RISK_FREE_TICKER = "^TNX"
+
+# Used only when the quote cannot be fetched, so a network hiccup costs the
+# user a current rate rather than the whole derivation.
+FALLBACK_RISK_FREE_RATE = 0.042
+
+
+def fetch_risk_free_rate() -> tuple[float, bool]:
+    """Return (rate, is_live). ^TNX quotes in percent, so 4.96 means 4.96%.
+
+    Deliberately separate from fetch_company_data: this is one shared market
+    rate rather than a property of the company, and it should be cached and
+    fail on its own. A dead Treasury quote must not take a valuation with it.
+    """
+    try:
+        import yfinance as yf
+
+        hist = yf.Ticker(_RISK_FREE_TICKER).history(period="5d")
+        close = hist["Close"].dropna()
+        if close.empty:
+            return FALLBACK_RISK_FREE_RATE, False
+        rate = float(close.iloc[-1]) / 100.0
+        # A 10-year yield outside 0-15% means the feed is wrong, not that the
+        # world changed.
+        if not 0.0 < rate < 0.15:
+            return FALLBACK_RISK_FREE_RATE, False
+        return rate, True
+    except Exception:
+        return FALLBACK_RISK_FREE_RATE, False
 
 
 # ---- helpers ---------------------------------------------------------------

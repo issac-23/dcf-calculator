@@ -8,8 +8,19 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from dcf import DCFInputs, run_dcf
-from dcf.data import CompanyData, DataFetchError, fetch_company_data
+from dcf.data import (
+    CompanyData,
+    DataFetchError,
+    fetch_company_data,
+    fetch_risk_free_rate,
+)
 from dcf.engine import implied_revenue_growth, sensitivity_grid
+from dcf.wacc import (
+    DEFAULT_EQUITY_RISK_PREMIUM,
+    WACCInputs,
+    WACCUnavailable,
+    compute_wacc,
+)
 
 st.set_page_config(
     page_title="DCF Calculator",
@@ -78,6 +89,52 @@ _PLOT_LAYOUT = dict(
 @st.cache_data(ttl=3600, show_spinner=False)
 def _cached_fetch(ticker: str) -> CompanyData:
     return fetch_company_data(ticker)
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _cached_risk_free() -> tuple[float, bool]:
+    return fetch_risk_free_rate()
+
+
+def _derive_wacc(company: CompanyData, risk_free: float, erp: float):
+    """Return (breakdown, reason_it_failed). Exactly one is None.
+
+    Every missing-input case is reported as its own sentence rather than one
+    generic failure, because "no beta for this ticker" and "market cap
+    unavailable" call for different responses from the user.
+    """
+    missing = [
+        name
+        for name, value in (
+            ("beta", company.beta),
+            ("market cap", company.market_cap),
+        )
+        if value is None
+    ]
+    if missing:
+        return None, f"Yahoo did not return {' or '.join(missing)} for this ticker."
+
+    try:
+        return (
+            compute_wacc(
+                WACCInputs(
+                    risk_free_rate=risk_free,
+                    beta=company.beta,
+                    equity_risk_premium=erp,
+                    market_cap=company.market_cap,
+                    total_debt=company.total_debt or 0.0,
+                    interest_expense=company.interest_expense,
+                    # Falls back to the US federal statutory rate when the
+                    # filing history does not give an effective rate.
+                    tax_rate=company.historical_tax_rate
+                    if company.historical_tax_rate is not None
+                    else 0.21,
+                )
+            ),
+            None,
+        )
+    except WACCUnavailable as e:
+        return None, str(e)
 
 
 def _format_money(x: float) -> str:
@@ -195,7 +252,40 @@ with st.sidebar:
 
     st.markdown("---")
     st.markdown("##### Discount rate & terminal value")
-    wacc = st.slider("WACC (discount rate)", 4.0, 20.0, 9.0, 0.25, format="%.2f%%")
+
+    risk_free, rf_is_live = _cached_risk_free()
+    erp_pct = st.slider(
+        "Equity risk premium", 3.0, 8.0, DEFAULT_EQUITY_RISK_PREMIUM * 100, 0.25,
+        format="%.2f%%",
+        help=(
+            "The only CAPM input that cannot be looked up — it is an assumption "
+            "about future returns, not a measurement. Damodaran's implied "
+            "premium for mature markets has sat in the 4–6% band for years."
+        ),
+    )
+    wacc_breakdown, wacc_reason = _derive_wacc(company, risk_free, erp_pct / 100)
+
+    # The derived figure seeds the slider rather than replacing it. WACC is
+    # the most consequential input in the model, so the user keeps the final
+    # say — but the starting point is now computed instead of a round 9%.
+    derived_pct = (
+        float(_clamp(wacc_breakdown.wacc * 100, 4.0, 20.0))
+        if wacc_breakdown
+        else 9.0
+    )
+    wacc = st.slider(
+        "WACC (discount rate)", 4.0, 20.0, derived_pct, 0.25, format="%.2f%%",
+        help=(
+            "Seeded from CAPM using this company's beta and capital structure. "
+            "Drag to override."
+            if wacc_breakdown
+            else "Could not be derived for this ticker, so this is a generic default."
+        ),
+    )
+    if wacc_breakdown:
+        st.caption(f"Derived: **{wacc_breakdown.wacc * 100:.2f}%**")
+    else:
+        st.caption(f"Not derived — {wacc_reason}")
     terminal_growth = st.slider("Terminal growth rate", 0.0, 5.0, 2.5, 0.25, format="%.2f%%")
     projection_years = st.slider("Projection years", 3, 10, 5)
 
@@ -270,6 +360,89 @@ e1, e2, e3 = st.columns(3)
 e1.metric("Enterprise value", _format_money(result.enterprise_value))
 e2.metric("Equity value", _format_money(result.equity_value))
 e3.metric("Net debt", _format_money(company.net_debt))
+
+
+# ----- cost of capital -----------------------------------------------------
+
+st.markdown("### Cost of capital")
+
+if wacc_breakdown is None:
+    st.info(
+        f"WACC could not be derived for {company.ticker} — {wacc_reason} "
+        f"The model is using the **{wacc:.2f}%** set in the sidebar."
+    )
+else:
+    b = wacc_breakdown
+    st.caption(
+        "Built from CAPM rather than assumed. WACC discounts every projected "
+        "cash flow and sets the terminal value denominator, so it moves the "
+        "answer more than any other input — it is worth seeing where it comes from."
+    )
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric(
+        "Cost of equity",
+        f"{b.cost_of_equity * 100:.2f}%",
+        f"{risk_free * 100:.2f}% risk-free + {company.beta:.2f}β × {erp_pct:.2f}%",
+        delta_color="off",
+    )
+    if b.cost_of_debt_after_tax is not None:
+        c2.metric(
+            "Cost of debt (after tax)",
+            f"{b.cost_of_debt_after_tax * 100:.2f}%",
+            f"{b.cost_of_debt_pretax * 100:.2f}% pre-tax",
+            delta_color="off",
+        )
+    else:
+        c2.metric("Cost of debt (after tax)", "—")
+    c3.metric(
+        "Weights",
+        f"{b.weight_equity * 100:.1f}% / {b.weight_debt * 100:.1f}%",
+        "equity / debt",
+        delta_color="off",
+    )
+
+    used_note = (
+        "matches the slider"
+        if abs(wacc - b.wacc * 100) < 0.01
+        else f"you have overridden it to {wacc:.2f}%"
+    )
+    st.caption(
+        f"Weighted average: **{b.wacc * 100:.2f}%** — {used_note}. "
+        f"Risk-free rate is the 10-year Treasury"
+        + (
+            f" at {risk_free * 100:.2f}%."
+            if rf_is_live
+            else f", which could not be fetched, so a {risk_free * 100:.2f}% fallback is in use."
+        )
+    )
+
+    if b.debt_cost_unknown:
+        st.warning(
+            f"{company.ticker} carries {_format_money(company.total_debt)} of debt, but "
+            "no interest expense was reported, so its cost could not be established. "
+            "The figure above is the cost of equity only, which understates WACC for "
+            "a leveraged company."
+        )
+
+    with st.expander("Why this is an estimate"):
+        st.markdown(
+            """
+**Cost of debt is backward-looking.** It divides reported interest expense by
+total debt, which gives the average rate the company is *already* paying, not
+the marginal rate it would pay to borrow today. Those diverge once rates move.
+The marginal rate is the theoretically correct input and is not disclosed.
+
+**The equity risk premium is not observable.** It is an assumption about future
+returns. The slider exists because your view is as legitimate as the default.
+
+**Beta is backward-looking too.** It is regressed on historical returns, so it
+describes how the stock *has* moved, not how it will.
+
+None of this makes a derived WACC worse than a guessed one — it makes the
+guess visible.
+            """
+        )
 
 
 # ----- year-by-year projection table ---------------------------------------
