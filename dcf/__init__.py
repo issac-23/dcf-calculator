@@ -5,6 +5,13 @@ from dcf.engine import (
     implied_revenue_growth,
     run_dcf,
 )
+from dcf.wacc import (
+    DEFAULT_EQUITY_RISK_PREMIUM,
+    WACCBreakdown,
+    WACCInputs,
+    WACCUnavailable,
+    compute_wacc,
+)
 
 __all__ = [
     "DCFInputs",
@@ -12,4 +19,9 @@ __all__ = [
     "YearProjection",
     "implied_revenue_growth",
     "run_dcf",
+    "DEFAULT_EQUITY_RISK_PREMIUM",
+    "WACCBreakdown",
+    "WACCInputs",
+    "WACCUnavailable",
+    "compute_wacc",
 ]
