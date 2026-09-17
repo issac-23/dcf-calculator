@@ -46,6 +46,12 @@ def _fake_company(**overrides) -> CompanyData:
         historical_capex_pct=0.04,
         historical_da_pct=0.05,
         historical_wc_pct=0.02,
+        # Enough for the CAPM derivation to succeed, so the WACC panel is on
+        # the rendered path rather than skipped.
+        beta=1.1,
+        market_cap=4.2e10,
+        total_debt=5e8,
+        interest_expense=2.5e7,
         is_dcf_inappropriate=False,
         warnings=[],
     )

@@ -31,10 +31,10 @@ def _full_fixture():
     cols = _years(2024, 2023, 2022, 2021)  # newest-first, like real yfinance
     financials = pd.DataFrame(
         {
-            cols[0]: [400_000, 100_000, 25_000, 110_000, 30_000],
-            cols[1]: [380_000, 95_000, 23_000, 100_000, 28_000],
-            cols[2]: [365_000, 90_000, 22_000, 95_000, 27_000],
-            cols[3]: [350_000, 85_000, 21_000, 90_000, 26_000],
+            cols[0]: [400_000, 100_000, 25_000, 110_000, 30_000, 2_400],
+            cols[1]: [380_000, 95_000, 23_000, 100_000, 28_000, 2_300],
+            cols[2]: [365_000, 90_000, 22_000, 95_000, 27_000, 2_200],
+            cols[3]: [350_000, 85_000, 21_000, 90_000, 26_000, 2_100],
         },
         index=[
             "Total Revenue",
@@ -42,6 +42,7 @@ def _full_fixture():
             "Tax Provision",
             "Pretax Income",
             "Reconciled Depreciation",
+            "Interest Expense",
         ],
     )
     cashflow = pd.DataFrame(
@@ -65,6 +66,8 @@ def _full_fixture():
         "sharesOutstanding": 1_000_000,
         "totalDebt": 50_000,
         "totalCash": 20_000,
+        "beta": 1.2,
+        "marketCap": 150_000_000,
     }
     return FakeTicker(info=info, financials=financials, cashflow=cashflow)
 
@@ -189,3 +192,51 @@ def test_missing_optional_historicals_returns_none_not_raises():
     assert cd.historical_da_pct is None
     # The non-cashflow historicals should still come through:
     assert cd.historical_operating_margin is not None
+
+
+# ----- CAPM inputs ----------------------------------------------------------
+
+
+def test_capm_fields_are_extracted():
+    d = build_company_data("TEST", _full_fixture())
+    assert d.beta == 1.2
+    assert d.market_cap == 150_000_000
+    assert d.total_debt == 50_000
+    assert d.interest_expense == 2_400  # newest year, not an average
+
+
+def test_capm_fields_are_none_when_absent_rather_than_zero():
+    """A missing beta has to be distinguishable from a beta of zero: one means
+    'no derivation', the other is a value the WACC module refuses."""
+    tk = _full_fixture()
+    tk.info = {k: v for k, v in tk.info.items() if k not in ("beta", "marketCap")}
+    d = build_company_data("TEST", tk)
+    assert d.beta is None
+    assert d.market_cap is None
+    # The valuation itself must survive losing the CAPM inputs.
+    assert d.revenue_base > 0
+    assert d.shares_outstanding > 0
+
+
+def test_interest_expense_falls_back_to_the_non_operating_line():
+    tk = _full_fixture()
+    tk.financials = tk.financials.rename(
+        index={"Interest Expense": "Interest Expense Non Operating"}
+    )
+    d = build_company_data("TEST", tk)
+    assert d.interest_expense == 2_400
+
+
+def test_interest_expense_is_none_when_not_reported():
+    tk = _full_fixture()
+    tk.financials = tk.financials.drop(index="Interest Expense")
+    d = build_company_data("TEST", tk)
+    assert d.interest_expense is None
+
+
+def test_negative_interest_expense_is_normalised_to_a_cost():
+    """yfinance is inconsistent about signs on this line."""
+    tk = _full_fixture()
+    tk.financials.loc["Interest Expense"] = -2_400
+    d = build_company_data("TEST", tk)
+    assert d.interest_expense == 2_400
