@@ -6,17 +6,17 @@ Notes for anyone — human or agent — writing code here.
 
 **Prefer end-to-end tests. They are the default, not the fallback.**
 
-`tests/e2e/` holds five journey tests. Between them they cover every path a
-person can take through this app: a valuation that works, one that works but
-produces an absurd number, a reverse solve with no answer, a company that is
-the wrong shape for the model, and data that isn't there. Each one starts at a
-recorded Yahoo Finance payload and ends at a rendered Streamlit page or a fair
-value per share, with nothing stubbed in between.
+`tests/e2e/` holds six journey tests. Between them they cover every path a
+person can take through this app: a valuation that works, the same one driven
+through the actual widgets, one that works but produces an absurd number, a
+reverse solve with no answer, a company that is the wrong shape for the model,
+and data that isn't there. Each starts at a recorded Yahoo Finance payload and
+ends at a rendered Streamlit page or a fair value per share, with nothing
+stubbed in between except the network call itself.
 
-When you add a feature, the question to answer first is which of those five
-journeys changes, or whether you have created a sixth. Adding a sixth is a
-real decision — five is close to the ceiling for a tool that asks one
-question.
+When you add a feature, the question to answer first is which of those six
+journeys changes, or whether you have created a seventh. Adding one is a real
+decision — this is close to the ceiling for a tool that asks one question.
 
 **Every E2E run produces a reviewable artifact.**
 `tests/e2e/__snapshots__/valuation_report.md` is regenerated on every run and

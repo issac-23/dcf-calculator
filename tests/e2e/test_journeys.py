@@ -64,6 +64,27 @@ def render_app(symbol) -> AppTest:
     return at
 
 
+def load_via_the_button(monkeypatch, symbol) -> AppTest:
+    """Type a ticker and click Load financials, the way a person does.
+
+    Only the network call itself is replaced — the button, the spinner, the
+    session-state write and both error branches are the real ones. Injecting
+    session_state directly (as render_app does) skips all of that, which is
+    how the load handler went untested for the life of the app.
+    """
+    def fake_fetch(ticker: str):
+        return build_company_data(ticker.strip().upper(), replay.load(ticker))
+
+    monkeypatch.setattr(dcf.data, "fetch_company_data", fake_fetch)
+    st.cache_data.clear()
+
+    at = AppTest.from_file(APP, default_timeout=120)
+    at.run()
+    at.text_input[0].set_value(symbol)
+    at.button[0].click().run()
+    return at
+
+
 def body(at: AppTest) -> str:
     return " ".join(
         [m.value for m in at.markdown]
@@ -97,6 +118,22 @@ def test_a_stable_company_values_near_its_market_price_and_the_page_renders():
                     "Sensitivity analysis", "Cost of capital"):
         assert section in text, f"{section!r} missing from the rendered page"
     assert len(at.dataframe) == 1, "projection table did not render"
+
+
+def test_typing_a_ticker_and_clicking_load_gets_you_a_valuation(monkeypatch):
+    """The same journey as above, driven through the actual widgets.
+
+    Everything else in this suite reaches the valuation by writing straight
+    into session_state, which skips the load handler entirely. This one
+    clicks the button.
+    """
+    at = load_via_the_button(monkeypatch, "JNJ")
+
+    assert not at.exception, "; ".join(str(e.value) for e in at.exception)
+    assert not at.error, "; ".join(e.value for e in at.error)
+    assert at.session_state["company"].ticker == "JNJ"
+    assert "Valuation" in body(at)
+    assert len(at.dataframe) == 1
 
 
 def test_a_volatile_company_is_discounted_far_below_market_and_says_why():
@@ -163,7 +200,7 @@ def test_a_bank_is_flagged_as_the_wrong_shape_for_this_model():
     assert "Valuation" in body(at), "it should still render a valuation"
 
 
-def test_a_delisted_company_fails_with_a_message_a_human_can_act_on():
+def test_a_delisted_company_fails_with_a_message_a_human_can_act_on(monkeypatch):
     """Karuna: acquired by Bristol-Myers in March 2024, no longer reporting.
 
     Two failures share this path — a company that never had revenue, and one
@@ -178,10 +215,14 @@ def test_a_delisted_company_fails_with_a_message_a_human_can_act_on():
     assert "KRTX" in message
     assert "revenue" in message.lower()
 
-    # And the app surfaces it as an error rather than dying.
-    at = AppTest.from_file(APP, default_timeout=120)
-    at.run()
-    assert not at.exception
+    # And a user who types KRTX and clicks Load sees that sentence as an
+    # error, with the app still standing and still asking for a ticker.
+    at = load_via_the_button(monkeypatch, "KRTX")
+
+    assert not at.exception, "the failure must be handled, not raised"
+    errors = " ".join(e.value for e in at.error)
+    assert "KRTX" in errors and "revenue" in errors.lower()
+    assert at.session_state["company"] is None
     assert any("Enter a ticker" in i.value for i in at.info)
 
 
