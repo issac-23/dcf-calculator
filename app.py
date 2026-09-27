@@ -8,6 +8,13 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from dcf import DCFInputs, run_dcf
+from dcf.assumptions import (
+    WACC_MAX_PCT,
+    WACC_MIN_PCT,
+    default_pct,
+    derive_wacc,
+    seeded_wacc_pct,
+)
 from dcf.data import (
     CompanyData,
     DataFetchError,
@@ -15,12 +22,7 @@ from dcf.data import (
     fetch_risk_free_rate,
 )
 from dcf.engine import implied_revenue_growth, sensitivity_grid
-from dcf.wacc import (
-    DEFAULT_EQUITY_RISK_PREMIUM,
-    WACCInputs,
-    WACCUnavailable,
-    compute_wacc,
-)
+from dcf.wacc import DEFAULT_EQUITY_RISK_PREMIUM
 
 st.set_page_config(
     page_title="DCF Calculator",
@@ -96,47 +98,6 @@ def _cached_risk_free() -> tuple[float, bool]:
     return fetch_risk_free_rate()
 
 
-def _derive_wacc(company: CompanyData, risk_free: float, erp: float):
-    """Return (breakdown, reason_it_failed). Exactly one is None.
-
-    Every missing-input case is reported as its own sentence rather than one
-    generic failure, because "no beta for this ticker" and "market cap
-    unavailable" call for different responses from the user.
-    """
-    missing = [
-        name
-        for name, value in (
-            ("beta", company.beta),
-            ("market cap", company.market_cap),
-        )
-        if value is None
-    ]
-    if missing:
-        return None, f"Yahoo did not return {' or '.join(missing)} for this ticker."
-
-    try:
-        return (
-            compute_wacc(
-                WACCInputs(
-                    risk_free_rate=risk_free,
-                    beta=company.beta,
-                    equity_risk_premium=erp,
-                    market_cap=company.market_cap,
-                    total_debt=company.total_debt or 0.0,
-                    interest_expense=company.interest_expense,
-                    # Falls back to the US federal statutory rate when the
-                    # filing history does not give an effective rate.
-                    tax_rate=company.historical_tax_rate
-                    if company.historical_tax_rate is not None
-                    else 0.21,
-                )
-            ),
-            None,
-        )
-    except WACCUnavailable as e:
-        return None, str(e)
-
-
 def _format_money(x: float) -> str:
     if x is None:
         return "—"
@@ -155,17 +116,6 @@ def _format_pct(x):
     if x is None:
         return "—"
     return f"{x * 100:.1f}%"
-
-
-def _clamp(value, lo, hi):
-    return max(lo, min(hi, value))
-
-
-def _default_pct(historical, fallback_pct: float, lo: float, hi: float) -> float:
-    """Pick a slider default in percent points, clamped to the slider's range."""
-    if historical is None:
-        return fallback_pct
-    return float(_clamp(historical * 100, lo, hi))
 
 
 # ----- sidebar: ticker -----------------------------------------------------
@@ -220,32 +170,32 @@ with st.sidebar:
 
     revenue_growth = st.slider(
         "Revenue growth (annual)", -10.0, 30.0,
-        _default_pct(company.historical_revenue_growth, 5.0, -10.0, 30.0),
+        default_pct(company.historical_revenue_growth, "revenue_growth"),
         0.5, format="%.1f%%",
     )
     operating_margin = st.slider(
         "Operating margin", -20.0, 60.0,
-        _default_pct(company.historical_operating_margin, 15.0, -20.0, 60.0),
+        default_pct(company.historical_operating_margin, "operating_margin"),
         0.5, format="%.1f%%",
     )
     tax_rate = st.slider(
         "Tax rate", 0.0, 40.0,
-        _default_pct(company.historical_tax_rate, 21.0, 0.0, 40.0),
+        default_pct(company.historical_tax_rate, "tax_rate"),
         0.5, format="%.1f%%",
     )
     capex_pct = st.slider(
         "Capex / revenue", 0.0, 30.0,
-        _default_pct(company.historical_capex_pct, 5.0, 0.0, 30.0),
+        default_pct(company.historical_capex_pct, "capex_pct"),
         0.5, format="%.1f%%",
     )
     da_pct = st.slider(
         "D&A / revenue", 0.0, 30.0,
-        _default_pct(company.historical_da_pct, 5.0, 0.0, 30.0),
+        default_pct(company.historical_da_pct, "da_pct"),
         0.5, format="%.1f%%",
     )
     wc_pct_input = st.slider(
         "Working capital / revenue", -10.0, 30.0,
-        _default_pct(company.historical_wc_pct, 2.0, -10.0, 30.0),
+        default_pct(company.historical_wc_pct, "wc_pct"),
         0.5, format="%.1f%%",
         help="Working capital balance as a percent of revenue. Year-over-year changes drive ΔWC in the FCF calc.",
     )
@@ -263,18 +213,15 @@ with st.sidebar:
             "premium for mature markets has sat in the 4–6% band for years."
         ),
     )
-    wacc_breakdown, wacc_reason = _derive_wacc(company, risk_free, erp_pct / 100)
+    wacc_breakdown, wacc_reason = derive_wacc(company, risk_free, erp_pct / 100)
 
     # The derived figure seeds the slider rather than replacing it. WACC is
     # the most consequential input in the model, so the user keeps the final
     # say — but the starting point is now computed instead of a round 9%.
-    derived_pct = (
-        float(_clamp(wacc_breakdown.wacc * 100, 4.0, 20.0))
-        if wacc_breakdown
-        else 9.0
-    )
+    derived_pct = seeded_wacc_pct(wacc_breakdown)
     wacc = st.slider(
-        "WACC (discount rate)", 4.0, 20.0, derived_pct, 0.25, format="%.2f%%",
+        "WACC (discount rate)", WACC_MIN_PCT, WACC_MAX_PCT, derived_pct, 0.25,
+        format="%.2f%%",
         help=(
             "Seeded from CAPM using this company's beta and capital structure. "
             "Drag to override."
