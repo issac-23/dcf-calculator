@@ -48,3 +48,11 @@ Price   = Equity / shares_outstanding
 
 The valuation engine in `dcf/engine.py` is pure Python with no I/O, validated
 against a hand-computed textbook problem in `tests/test_engine.py`.
+
+## Limitations
+
+Running the model across seven tickers puts every low-beta name within 30% of
+the market price and every high-beta name 55–95% below it. That ordering is a
+property of CAPM, not of the businesses. [LIMITATIONS.md](LIMITATIONS.md) has
+the measurements: where the output comes from, how much of it is the discount
+rate, and which companies this model cannot value at all.
