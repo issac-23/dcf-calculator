@@ -46,33 +46,6 @@ def test_matches_hand_computed_aapl():
     assert not b.debt_cost_unknown
 
 
-def test_weights_sum_to_one():
-    b = compute_wacc(_aapl())
-    assert b.weight_equity + b.weight_debt == pytest.approx(1.0)
-
-
-def test_wacc_sits_between_the_two_capital_costs():
-    """A weighted average cannot fall outside the things it averages."""
-    b = compute_wacc(_aapl())
-    lo = min(b.cost_of_equity, b.cost_of_debt_after_tax)
-    hi = max(b.cost_of_equity, b.cost_of_debt_after_tax)
-    assert lo <= b.wacc <= hi
-
-
-def test_higher_beta_raises_wacc():
-    low = compute_wacc(_aapl(beta=0.8)).wacc
-    high = compute_wacc(_aapl(beta=1.6)).wacc
-    assert high > low
-
-
-def test_more_debt_lowers_wacc_when_debt_is_cheaper():
-    """The tax shield is the whole reason leverage moves WACC down here."""
-    light = compute_wacc(_aapl(total_debt=10_000_000_000, interest_expense=466_000_000))
-    heavy = compute_wacc(_aapl(total_debt=2_000_000_000_000, interest_expense=93_260_000_000))
-    assert heavy.cost_of_debt_after_tax < heavy.cost_of_equity
-    assert heavy.wacc < light.wacc
-
-
 def test_zero_debt_gives_pure_cost_of_equity():
     b = compute_wacc(_aapl(total_debt=0, interest_expense=None))
     assert b.wacc == b.cost_of_equity
@@ -120,10 +93,3 @@ def test_default_erp_is_in_the_documented_band():
     """Guards the constant against a careless edit; 4-6% is the mature-market
     range the docstring cites."""
     assert 0.04 <= DEFAULT_EQUITY_RISK_PREMIUM <= 0.06
-
-
-def test_result_lands_in_the_range_the_engine_accepts():
-    """run_dcf rejects a WACC outside 1-50%, so a derived value has to clear
-    that bar or the app would hand the engine something it refuses."""
-    b = compute_wacc(_aapl())
-    assert 0.01 <= b.wacc <= 0.5

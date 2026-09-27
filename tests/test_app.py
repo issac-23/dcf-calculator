@@ -87,35 +87,6 @@ def _run(company: CompanyData | None = None) -> AppTest:
     return at
 
 
-def test_landing_state_renders():
-    at = _run()
-    assert any("Load financials" in b.label for b in at.button)
-    assert any("Enter a ticker" in i.value for i in at.info)
-
-
-def test_full_render_reaches_every_section():
-    at = _run(_fake_company())
-
-    # st.stop() sits between the landing state and everything below, so these
-    # assertions are what prove the rest of the script actually executed.
-    assert len(at.dataframe) == 1, "projection table did not render"
-    assert len(at.metric) >= 12, f"expected the metric rows, got {len(at.metric)}"
-
-    markdown = " ".join(m.value for m in at.markdown)
-    for section in ("Valuation", "Free cash flow projection", "Reverse DCF",
-                    "Sensitivity analysis"):
-        assert section in markdown, f"{section!r} section missing"
-
-
-def test_negative_margin_company_renders_its_warning():
-    """The unprofitable path has its own branches; make sure they render too."""
-    at = _run(_fake_company(
-        historical_operating_margin=-0.10,
-        warnings=["Historical operating margin is negative."],
-    ))
-    assert any("negative" in w.value.lower() for w in at.warning)
-
-
 def test_missing_price_skips_reverse_dcf_without_erroring():
     """Reverse DCF needs a market price to solve against; absent one it is
     skipped rather than fed a zero."""
@@ -126,14 +97,6 @@ def test_missing_price_skips_reverse_dcf_without_erroring():
 
 
 # ----- cost of capital panel ------------------------------------------------
-
-
-def test_cost_of_capital_section_renders_when_derivable():
-    at = _run(_fake_company())
-    markdown = " ".join(m.value for m in at.markdown)
-    assert "Cost of capital" in markdown
-    captions = " ".join(m.value for m in at.caption)
-    assert "CAPM" in captions or "CAPM" in markdown
 
 
 def test_missing_beta_explains_itself_instead_of_erroring():

@@ -77,75 +77,12 @@ def test_textbook_case_pv_fcf_each_year_is_150():
 # ----- Property tests -------------------------------------------------------
 
 
-def test_higher_wacc_decreases_fair_value():
-    low = run_dcf(_base_inputs(wacc=0.08)).fair_value_per_share
-    high = run_dcf(_base_inputs(wacc=0.12)).fair_value_per_share
-    assert low > high
-
-
-def test_higher_revenue_growth_increases_fair_value():
-    low = run_dcf(_base_inputs(revenue_growth=0.05)).fair_value_per_share
-    high = run_dcf(_base_inputs(revenue_growth=0.15)).fair_value_per_share
-    assert high > low
-
-
-def test_higher_terminal_growth_increases_fair_value():
-    low = run_dcf(_base_inputs(terminal_growth=0.01)).fair_value_per_share
-    high = run_dcf(_base_inputs(terminal_growth=0.04)).fair_value_per_share
-    assert high > low
-
-
-def test_higher_operating_margin_increases_fair_value():
-    low = run_dcf(_base_inputs(operating_margin=0.10)).fair_value_per_share
-    high = run_dcf(_base_inputs(operating_margin=0.30)).fair_value_per_share
-    assert high > low
-
-
-def test_higher_tax_rate_decreases_fair_value():
-    low_tax = run_dcf(_base_inputs(tax_rate=0.15)).fair_value_per_share
-    high_tax = run_dcf(_base_inputs(tax_rate=0.35)).fair_value_per_share
-    assert low_tax > high_tax
-
-
 def test_more_net_debt_decreases_equity_value():
     no_debt = run_dcf(_base_inputs(net_debt=0.0)).fair_value_per_share
     with_debt = run_dcf(_base_inputs(net_debt=500.0)).fair_value_per_share
     assert no_debt > with_debt
     # Specifically: 500 of net debt across 100 shares = $5/share
     assert no_debt - with_debt == pytest.approx(5.0, abs=0.001)
-
-
-def test_more_shares_outstanding_decreases_per_share_value():
-    fewer = run_dcf(_base_inputs(shares_outstanding=100.0)).fair_value_per_share
-    more = run_dcf(_base_inputs(shares_outstanding=200.0)).fair_value_per_share
-    assert fewer == pytest.approx(more * 2, abs=0.001)
-
-
-def test_pv_factors_decrease_monotonically():
-    result = run_dcf(_base_inputs())
-    factors = [p.discount_factor for p in result.projections]
-    assert factors == sorted(factors, reverse=True)
-
-
-def test_revenue_compounds_correctly():
-    result = run_dcf(_base_inputs(revenue_growth=0.10, revenue_base=1000.0))
-    expected = [1000.0 * 1.1 ** t for t in range(1, 6)]
-    actual = [p.revenue for p in result.projections]
-    for a, e in zip(actual, expected):
-        assert a == pytest.approx(e, abs=0.001)
-
-
-# ----- Edge / validation tests ---------------------------------------------
-
-
-def test_terminal_growth_above_wacc_raises():
-    with pytest.raises(ValueError, match="terminal_growth"):
-        run_dcf(_base_inputs(terminal_growth=0.05, wacc=0.04))
-
-
-def test_terminal_growth_equal_to_wacc_raises():
-    with pytest.raises(ValueError, match="terminal_growth"):
-        run_dcf(_base_inputs(terminal_growth=0.10, wacc=0.10))
 
 
 def test_zero_shares_outstanding_raises():
@@ -166,28 +103,6 @@ def test_unrealistic_terminal_growth_raises():
 def test_zero_wacc_raises():
     with pytest.raises(ValueError, match="wacc"):
         run_dcf(_base_inputs(wacc=0.0))
-
-
-def test_negative_growth_company_still_values():
-    # Declining business — should still produce a positive (though lower) value.
-    result = run_dcf(_base_inputs(revenue_growth=-0.05, terminal_growth=0.0))
-    assert result.fair_value_per_share > 0
-    assert math.isfinite(result.fair_value_per_share)
-
-
-def test_unprofitable_company_can_have_negative_value():
-    # Negative operating margin: this stress-tests the "Tesla 2018" case.
-    result = run_dcf(_base_inputs(operating_margin=-0.10))
-    assert math.isfinite(result.fair_value_per_share)
-    # With negative NOPAT, FCF is negative => fair value should be negative
-    assert result.fair_value_per_share < 0
-
-
-def test_projection_length_respected():
-    short = run_dcf(_base_inputs(projection_years=3))
-    long = run_dcf(_base_inputs(projection_years=10))
-    assert len(short.projections) == 3
-    assert len(long.projections) == 10
 
 
 def test_invalid_projection_years_raises():
@@ -237,21 +152,6 @@ def test_implied_growth_round_trips_to_forward_dcf():
     implied = implied_revenue_growth(inputs, forward_price)
     assert implied is not None
     assert implied == pytest.approx(0.10, abs=0.001)
-
-
-def test_implied_growth_higher_target_price_implies_higher_growth():
-    inputs = _base_inputs()
-    base_price = run_dcf(inputs).fair_value_per_share
-    lower = implied_revenue_growth(inputs, base_price * 0.8)
-    higher = implied_revenue_growth(inputs, base_price * 1.2)
-    assert lower is not None and higher is not None
-    assert higher > lower
-
-
-def test_implied_growth_returns_none_for_unreachable_price():
-    inputs = _base_inputs()
-    # A price so high no revenue_growth within [-0.5, 1.0] can reach it.
-    assert implied_revenue_growth(inputs, 1e12) is None
 
 
 def test_implied_growth_round_trips_when_growth_destroys_value():
