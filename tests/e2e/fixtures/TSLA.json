@@ -1,0 +1,1065 @@
+{
+ "cashflow": {
+  "columns": [
+   "2025-12-31T00:00:00",
+   "2024-12-31T00:00:00",
+   "2023-12-31T00:00:00",
+   "2022-12-31T00:00:00",
+   "2021-12-31T00:00:00"
+  ],
+  "data": [
+   [
+    6220000000.0,
+    3581000000.0,
+    4357000000.0,
+    7552000000.0,
+    null
+   ],
+   [
+    -5650000000.0,
+    -2881000000.0,
+    -1815000000.0,
+    -3866000000.0,
+    null
+   ],
+   [
+    5586000000.0,
+    5744000000.0,
+    3931000000.0,
+    0.0,
+    null
+   ],
+   [
+    null,
+    null,
+    null,
+    0.0,
+    0.0
+   ],
+   [
+    -8527000000.0,
+    -11342000000.0,
+    -8899000000.0,
+    -7172000000.0,
+    null
+   ],
+   [
+    292000000.0,
+    277000000.0,
+    126000000.0,
+    152000000.0,
+    null
+   ],
+   [
+    null,
+    1331000000.0,
+    1119000000.0,
+    1203000000.0,
+    561000000.0
+   ],
+   [
+    17616000000.0,
+    17037000000.0,
+    17189000000.0,
+    16924000000.0,
+    null
+   ],
+   [
+    17037000000.0,
+    17189000000.0,
+    16924000000.0,
+    18144000000.0,
+    null
+   ],
+   [
+    171000000.0,
+    -141000000.0,
+    4000000.0,
+    -444000000.0,
+    null
+   ],
+   [
+    408000000.0,
+    -11000000.0,
+    261000000.0,
+    -776000000.0,
+    null
+   ],
+   [
+    1139000000.0,
+    3853000000.0,
+    2589000000.0,
+    -3527000000.0,
+    null
+   ],
+   [
+    1139000000.0,
+    3853000000.0,
+    2589000000.0,
+    -3527000000.0,
+    null
+   ],
+   [
+    17000000.0,
+    -251000000.0,
+    -227000000.0,
+    -202000000.0,
+    null
+   ],
+   [
+    1186000000.0,
+    1241000000.0,
+    700000000.0,
+    541000000.0,
+    null
+   ],
+   [
+    null,
+    null,
+    null,
+    0.0,
+    0.0
+   ],
+   [
+    null,
+    null,
+    null,
+    0.0,
+    0.0
+   ],
+   [
+    -64000000.0,
+    2863000000.0,
+    2116000000.0,
+    -3866000000.0,
+    null
+   ],
+   [
+    -64000000.0,
+    2863000000.0,
+    2116000000.0,
+    -3866000000.0,
+    null
+   ],
+   [
+    -5650000000.0,
+    -2881000000.0,
+    -1815000000.0,
+    -3866000000.0,
+    null
+   ],
+   [
+    5586000000.0,
+    5744000000.0,
+    3931000000.0,
+    0.0,
+    null
+   ],
+   [
+    -15478000000.0,
+    -18787000000.0,
+    -15584000000.0,
+    -11973000000.0,
+    null
+   ],
+   [
+    -15478000000.0,
+    -18787000000.0,
+    -15584000000.0,
+    -11973000000.0,
+    null
+   ],
+   [
+    null,
+    null,
+    null,
+    76000000.0,
+    6000000.0
+   ],
+   [
+    -6951000000.0,
+    -7445000000.0,
+    -6621000000.0,
+    -5813000000.0,
+    null
+   ],
+   [
+    30158000000.0,
+    28510000000.0,
+    12491000000.0,
+    22000000.0,
+    null
+   ],
+   [
+    -37109000000.0,
+    -35955000000.0,
+    -19112000000.0,
+    -5835000000.0,
+    null
+   ],
+   [
+    0.0,
+    0.0,
+    -64000000.0,
+    0.0,
+    null
+   ],
+   [
+    null,
+    null,
+    null,
+    0.0,
+    0.0
+   ],
+   [
+    0.0,
+    0.0,
+    -64000000.0,
+    0.0,
+    null
+   ],
+   [
+    null,
+    0.0,
+    0.0,
+    927000000.0,
+    -1228000000.0
+   ],
+   [
+    null,
+    0.0,
+    0.0,
+    936000000.0,
+    272000000.0
+   ],
+   [
+    null,
+    0.0,
+    0.0,
+    -9000000.0,
+    -1500000000.0
+   ],
+   [
+    -8527000000.0,
+    -11342000000.0,
+    -8899000000.0,
+    -7163000000.0,
+    null
+   ],
+   [
+    -8527000000.0,
+    -11342000000.0,
+    -8899000000.0,
+    -7163000000.0,
+    null
+   ],
+   [
+    14747000000.0,
+    14923000000.0,
+    13256000000.0,
+    14724000000.0,
+    null
+   ],
+   [
+    14747000000.0,
+    14923000000.0,
+    13256000000.0,
+    14724000000.0,
+    null
+   ],
+   [
+    642000000.0,
+    81000000.0,
+    -2248000000.0,
+    -3712000000.0,
+    null
+   ],
+   [
+    363000000.0,
+    502000000.0,
+    1532000000.0,
+    1131000000.0,
+    null
+   ],
+   [
+    null,
+    null,
+    null,
+    1904000000.0,
+    476000000.0
+   ],
+   [
+    -25000000.0,
+    -590000000.0,
+    -1952000000.0,
+    -1570000000.0,
+    null
+   ],
+   [
+    4376000000.0,
+    3588000000.0,
+    2605000000.0,
+    8029000000.0,
+    null
+   ],
+   [
+    4376000000.0,
+    3588000000.0,
+    2605000000.0,
+    8029000000.0,
+    null
+   ],
+   [
+    4376000000.0,
+    3588000000.0,
+    2605000000.0,
+    8029000000.0,
+    null
+   ],
+   [
+    -3181000000.0,
+    -3273000000.0,
+    -2652000000.0,
+    -3713000000.0,
+    null
+   ],
+   [
+    -630000000.0,
+    937000000.0,
+    -1195000000.0,
+    -6465000000.0,
+    null
+   ],
+   [
+    -261000000.0,
+    -1083000000.0,
+    -586000000.0,
+    -1124000000.0,
+    null
+   ],
+   [
+    -261000000.0,
+    -1083000000.0,
+    -586000000.0,
+    -1124000000.0,
+    null
+   ],
+   [
+    272000000.0,
+    172000000.0,
+    81000000.0,
+    340000000.0,
+    null
+   ],
+   [
+    2825000000.0,
+    1999000000.0,
+    1812000000.0,
+    1560000000.0,
+    null
+   ],
+   [
+    362000000.0,
+    335000000.0,
+    463000000.0,
+    177000000.0,
+    null
+   ],
+   [
+    123000000.0,
+    477000000.0,
+    -6349000000.0,
+    -196000000.0,
+    null
+   ],
+   [
+    123000000.0,
+    477000000.0,
+    -6349000000.0,
+    -196000000.0,
+    null
+   ],
+   [
+    6148000000.0,
+    5368000000.0,
+    4667000000.0,
+    3747000000.0,
+    null
+   ],
+   [
+    6148000000.0,
+    5368000000.0,
+    4667000000.0,
+    3747000000.0,
+    null
+   ],
+   [
+    6148000000.0,
+    5368000000.0,
+    4667000000.0,
+    3747000000.0,
+    null
+   ],
+   [
+    520000000.0,
+    -662000000.0,
+    -144000000.0,
+    221000000.0,
+    null
+   ],
+   [
+    452000000.0,
+    -73000000.0,
+    -144000000.0,
+    81000000.0,
+    null
+   ],
+   [
+    68000000.0,
+    -589000000.0,
+    0.0,
+    140000000.0,
+    null
+   ],
+   [
+    3855000000.0,
+    7153000000.0,
+    14974000000.0,
+    12587000000.0,
+    null
+   ]
+  ],
+  "index": [
+   "Free Cash Flow",
+   "Repayment Of Debt",
+   "Issuance Of Debt",
+   "Issuance Of Capital Stock",
+   "Capital Expenditure",
+   "Interest Paid Supplemental Data",
+   "Income Tax Paid Supplemental Data",
+   "End Cash Position",
+   "Beginning Cash Position",
+   "Effect Of Exchange Rate Changes",
+   "Changes In Cash",
+   "Financing Cash Flow",
+   "Cash Flow From Continuing Financing Activities",
+   "Net Other Financing Charges",
+   "Proceeds From Stock Option Exercised",
+   "Net Common Stock Issuance",
+   "Common Stock Issuance",
+   "Net Issuance Payments Of Debt",
+   "Net Long Term Debt Issuance",
+   "Long Term Debt Payments",
+   "Long Term Debt Issuance",
+   "Investing Cash Flow",
+   "Cash Flow From Continuing Investing Activities",
+   "Net Other Investing Changes",
+   "Net Investment Purchase And Sale",
+   "Sale Of Investment",
+   "Purchase Of Investment",
+   "Net Business Purchase And Sale",
+   "Sale Of Business",
+   "Purchase Of Business",
+   "Net Intangibles Purchase And Sale",
+   "Sale Of Intangibles",
+   "Purchase Of Intangibles",
+   "Net PPE Purchase And Sale",
+   "Purchase Of PPE",
+   "Operating Cash Flow",
+   "Cash Flow From Continuing Operating Activities",
+   "Change In Working Capital",
+   "Change In Other Working Capital",
+   "Change In Other Current Liabilities",
+   "Change In Other Current Assets",
+   "Change In Payables And Accrued Expense",
+   "Change In Payable",
+   "Change In Account Payable",
+   "Change In Prepaid Assets",
+   "Change In Inventory",
+   "Change In Receivables",
+   "Changes In Account Receivables",
+   "Other Non Cash Items",
+   "Stock Based Compensation",
+   "Asset Impairment Charge",
+   "Deferred Tax",
+   "Deferred Income Tax",
+   "Depreciation Amortization Depletion",
+   "Depreciation And Amortization",
+   "Depreciation",
+   "Operating Gains Losses",
+   "Net Foreign Currency Exchange Gain Loss",
+   "Gain Loss On Sale Of PPE",
+   "Net Income From Continuing Operations"
+  ]
+ },
+ "financials": {
+  "columns": [
+   "2025-12-31T00:00:00",
+   "2024-12-31T00:00:00",
+   "2023-12-31T00:00:00",
+   "2022-12-31T00:00:00",
+   "2021-12-31T00:00:00"
+  ],
+  "data": [
+   [
+    -133380000.0,
+    -136800000.0,
+    0.0,
+    -14080000.0,
+    null
+   ],
+   [
+    0.27,
+    0.2,
+    0.21,
+    0.08,
+    null
+   ],
+   [
+    12258000000.0,
+    15392000000.0,
+    14796000000.0,
+    17833000000.0,
+    null
+   ],
+   [
+    -494000000.0,
+    -684000000.0,
+    0.0,
+    -176000000.0,
+    null
+   ],
+   [
+    -494000000.0,
+    -684000000.0,
+    0.0,
+    -176000000.0,
+    null
+   ],
+   [
+    3794000000.0,
+    7130000000.0,
+    14999000000.0,
+    12583000000.0,
+    null
+   ],
+   [
+    6148000000.0,
+    5368000000.0,
+    4667000000.0,
+    3747000000.0,
+    null
+   ],
+   [
+    77733000000.0,
+    80240000000.0,
+    79113000000.0,
+    60609000000.0,
+    null
+   ],
+   [
+    11764000000.0,
+    14708000000.0,
+    14796000000.0,
+    17657000000.0,
+    null
+   ],
+   [
+    5616000000.0,
+    9340000000.0,
+    10129000000.0,
+    13910000000.0,
+    null
+   ],
+   [
+    1342000000.0,
+    1219000000.0,
+    910000000.0,
+    106000000.0,
+    null
+   ],
+   [
+    338000000.0,
+    350000000.0,
+    156000000.0,
+    191000000.0,
+    null
+   ],
+   [
+    1680000000.0,
+    1569000000.0,
+    1066000000.0,
+    297000000.0,
+    null
+   ],
+   [
+    4154620000.0,
+    7677200000.0,
+    14999000000.0,
+    12744920000.0,
+    null
+   ],
+   [
+    3794000000.0,
+    7130000000.0,
+    14999000000.0,
+    12583000000.0,
+    null
+   ],
+   [
+    89978000000.0,
+    89930000000.0,
+    87882000000.0,
+    67630000000.0,
+    null
+   ],
+   [
+    null,
+    1003000000.0,
+    1268000000.0,
+    1509000000.0,
+    978000000.0
+   ],
+   [
+    4355000000.0,
+    7076000000.0,
+    8891000000.0,
+    13656000000.0,
+    null
+   ],
+   [
+    3526250000.0,
+    3216000000.0,
+    3482750000.0,
+    3475000000.0,
+    null
+   ],
+   [
+    3224750000.0,
+    3216000000.0,
+    3173500000.0,
+    3130000000.0,
+    null
+   ],
+   [
+    1.08,
+    2.04,
+    4.31,
+    3.62,
+    null
+   ],
+   [
+    1.176525,
+    2.23,
+    4.725697,
+    4.02,
+    null
+   ],
+   [
+    3794000000.0,
+    7130000000.0,
+    14999000000.0,
+    12584000000.0,
+    null
+   ],
+   [
+    null,
+    0.0,
+    0.0,
+    1000000.0,
+    9000000.0
+   ],
+   [
+    3794000000.0,
+    7130000000.0,
+    14999000000.0,
+    12583000000.0,
+    null
+   ],
+   [
+    null,
+    null,
+    null,
+    null,
+    -5000000.0
+   ],
+   [
+    3794000000.0,
+    7130000000.0,
+    14999000000.0,
+    12583000000.0,
+    null
+   ],
+   [
+    -61000000.0,
+    -23000000.0,
+    25000000.0,
+    -4000000.0,
+    null
+   ],
+   [
+    3855000000.0,
+    7153000000.0,
+    14974000000.0,
+    12587000000.0,
+    null
+   ],
+   [
+    3855000000.0,
+    7153000000.0,
+    14974000000.0,
+    12587000000.0,
+    null
+   ],
+   [
+    1423000000.0,
+    1837000000.0,
+    -5001000000.0,
+    1132000000.0,
+    null
+   ],
+   [
+    5278000000.0,
+    8990000000.0,
+    9973000000.0,
+    13719000000.0,
+    null
+   ],
+   [
+    -913000000.0,
+    11000000.0,
+    172000000.0,
+    -219000000.0,
+    null
+   ],
+   [
+    -419000000.0,
+    695000000.0,
+    172000000.0,
+    -43000000.0,
+    null
+   ],
+   [
+    -494000000.0,
+    -684000000.0,
+    0.0,
+    -176000000.0,
+    null
+   ],
+   [
+    494000000.0,
+    684000000.0,
+    0.0,
+    176000000.0,
+    null
+   ],
+   [
+    1342000000.0,
+    1219000000.0,
+    910000000.0,
+    106000000.0,
+    null
+   ],
+   [
+    338000000.0,
+    350000000.0,
+    156000000.0,
+    191000000.0,
+    null
+   ],
+   [
+    1680000000.0,
+    1569000000.0,
+    1066000000.0,
+    297000000.0,
+    null
+   ],
+   [
+    4849000000.0,
+    7760000000.0,
+    8891000000.0,
+    13832000000.0,
+    null
+   ],
+   [
+    12245000000.0,
+    9690000000.0,
+    8769000000.0,
+    7021000000.0,
+    null
+   ],
+   [
+    6411000000.0,
+    4540000000.0,
+    3969000000.0,
+    3075000000.0,
+    null
+   ],
+   [
+    5834000000.0,
+    5150000000.0,
+    4800000000.0,
+    3946000000.0,
+    null
+   ],
+   [
+    17094000000.0,
+    17450000000.0,
+    17660000000.0,
+    20853000000.0,
+    null
+   ],
+   [
+    77733000000.0,
+    80240000000.0,
+    79113000000.0,
+    60609000000.0,
+    null
+   ],
+   [
+    94827000000.0,
+    97690000000.0,
+    96773000000.0,
+    81462000000.0,
+    null
+   ],
+   [
+    94827000000.0,
+    97690000000.0,
+    96773000000.0,
+    81462000000.0,
+    null
+   ]
+  ],
+  "index": [
+   "Tax Effect Of Unusual Items",
+   "Tax Rate For Calcs",
+   "Normalized EBITDA",
+   "Total Unusual Items",
+   "Total Unusual Items Excluding Goodwill",
+   "Net Income From Continuing Operation Net Minority Interest",
+   "Reconciled Depreciation",
+   "Reconciled Cost Of Revenue",
+   "EBITDA",
+   "EBIT",
+   "Net Interest Income",
+   "Interest Expense",
+   "Interest Income",
+   "Normalized Income",
+   "Net Income From Continuing And Discontinued Operation",
+   "Total Expenses",
+   "Rent Expense Supplemental",
+   "Total Operating Income As Reported",
+   "Diluted Average Shares",
+   "Basic Average Shares",
+   "Diluted EPS",
+   "Basic EPS",
+   "Diluted NI Availto Com Stockholders",
+   "Average Dilution Earnings",
+   "Net Income Common Stockholders",
+   "Otherunder Preferred Stock Dividend",
+   "Net Income",
+   "Minority Interests",
+   "Net Income Including Noncontrolling Interests",
+   "Net Income Continuous Operations",
+   "Tax Provision",
+   "Pretax Income",
+   "Other Income Expense",
+   "Other Non Operating Income Expenses",
+   "Special Income Charges",
+   "Restructuring And Mergern Acquisition",
+   "Net Non Operating Interest Income Expense",
+   "Interest Expense Non Operating",
+   "Interest Income Non Operating",
+   "Operating Income",
+   "Operating Expense",
+   "Research And Development",
+   "Selling General And Administration",
+   "Gross Profit",
+   "Cost Of Revenue",
+   "Total Revenue",
+   "Operating Revenue"
+  ]
+ },
+ "info": {
+  "52WeekChange": -0.1604206,
+  "SandP52WeekChange": 0.15656614,
+  "address1": "1 Tesla Road",
+  "allTimeHigh": 498.83,
+  "allTimeLow": 0.998667,
+  "ask": 374.27,
+  "askSize": 2,
+  "auditRisk": 4,
+  "averageAnalystRating": "2.3 - Buy",
+  "averageDailyVolume10Day": 35626190,
+  "averageDailyVolume3Month": 39040411,
+  "averageVolume": 39040411,
+  "averageVolume10days": 35626190,
+  "beta": 1.845,
+  "bid": 371.16,
+  "bidSize": 1,
+  "boardRisk": 10,
+  "bookValue": 21.995,
+  "city": "Austin",
+  "compensationAsOfEpochDate": 1767139200,
+  "compensationRisk": 10,
+  "country": "United States",
+  "cryptoTradeable": false,
+  "currency": "USD",
+  "currentPrice": 372.11,
+  "currentRatio": 1.941,
+  "customPriceAlertConfidence": "HIGH",
+  "dateShortInterest": 1789430400,
+  "dayHigh": 386.83,
+  "dayLow": 367.67,
+  "debtToEquity": 18.373,
+  "displayName": "Tesla",
+  "earningsCallTimestampEnd": 1784755800,
+  "earningsCallTimestampStart": 1784755800,
+  "earningsGrowth": -0.03,
+  "earningsQuarterlyGrowth": -0.049,
+  "earningsTimestamp": 1784750400,
+  "earningsTimestampEnd": 1792612800,
+  "earningsTimestampStart": 1792612800,
+  "ebitda": 10755000320,
+  "ebitdaMargins": 0.10379,
+  "enterpriseToEbitda": 134.159,
+  "enterpriseToRevenue": 13.925,
+  "enterpriseValue": 1442883043328,
+  "epsCurrentYear": 1.76531,
+  "epsForward": 2.17289,
+  "epsTrailingTwelveMonths": 1.08,
+  "esgPopulated": false,
+  "exchange": "NMS",
+  "exchangeDataDelayedBy": 0,
+  "exchangeTimezoneName": "America/New_York",
+  "exchangeTimezoneShortName": "EDT",
+  "fiftyDayAverage": 348.2486,
+  "fiftyDayAverageChange": 23.86139,
+  "fiftyDayAverageChangePercent": 0.068518266,
+  "fiftyTwoWeekChangePercent": -16.042059,
+  "fiftyTwoWeekHigh": 498.83,
+  "fiftyTwoWeekHighChange": -126.72,
+  "fiftyTwoWeekHighChangePercent": -0.25403446,
+  "fiftyTwoWeekLow": 297.38,
+  "fiftyTwoWeekLowChange": 74.72998,
+  "fiftyTwoWeekLowChangePercent": 0.25129458,
+  "fiftyTwoWeekRange": "297.38 - 498.83",
+  "financialCurrency": "USD",
+  "firstTradeDateMilliseconds": 1277818200000,
+  "floatShares": 2819186930,
+  "forwardEps": 2.17289,
+  "forwardPE": 171.25119,
+  "freeCashflow": 4835999744,
+  "fullExchangeName": "NasdaqGS",
+  "fullTimeEmployees": 134785,
+  "fulldayChange": -5.83002,
+  "fulldayChangePercent": -1.54258,
+  "fulldayPrice": 372.59,
+  "gmtOffSetMilliseconds": -14400000,
+  "governanceEpochDate": 1788220800,
+  "grossMargins": 0.18852,
+  "grossProfits": 19534000128,
+  "hasPrePostMarketData": true,
+  "heldPercentInsiders": 0.17819001,
+  "heldPercentInstitutions": 0.43668,
+  "impliedSharesOutstanding": 3949547394,
+  "industry": "Auto Manufacturers",
+  "industryDisp": "Auto Manufacturers",
+  "industryKey": "auto-manufacturers",
+  "isEarningsDateEstimate": true,
+  "language": "en-US",
+  "lastFiscalYearEnd": 1767139200,
+  "lastSplitDate": 1661385600,
+  "lastSplitFactor": "3:1",
+  "longBusinessSummary": "Tesla, Inc. designs, develops, manufactures, leases, and sells electric vehicles, and energy generation and storage systems in the United States, China, and internationally. The company operates in two segments, Automotive; and Energy Generation and Storage. The company offers electric vehicles, as well as sells automotive regulatory credits; and non-warranty maintenance services and collision, automotive insurance services, as well as part sales and retail merchandise sale. It also provides sedans and sport utility vehicles through direct and used vehicle sales, a network of Tesla Superchargers, and in-app upgrades; purchase financing and leasing services; services for electric vehicles through its company-owned service locations and Tesla mobile service technicians; and vehicle limited warranties and extended service plans. In addition, the company engages in the design, manufacture, installation, sale, and leasing of solar energy generation and energy storage products, and related services to residential, commercial, and industrial customers and utilities through its website, stores, and galleries, as well as through a network of channel partners. Further, it provides services and repairs to its energy product customers, including under warranty and extended service plans; and various financing options to its residential customers; lithium-ion battery energy storage products, such as Powerwall and Megapack; energy generation products, including solar panels and solar roof; self-driving development and artificial intelligence software, vehicle control and infotainment software, and battery and powertrain. The company was formerly known as Tesla Motors, Inc. and changed its name to Tesla, Inc. in February 2017. Tesla, Inc. was incorporated in 2003 and is headquartered in Austin, Texas.",
+  "longName": "Tesla, Inc.",
+  "market": "us_market",
+  "marketCap": 1469666033664,
+  "marketState": "CLOSED",
+  "maxAge": 86400,
+  "messageBoardId": "finmb_27444752",
+  "mostRecentQuarter": 1782777600,
+  "netIncomeToCommon": 3806000128,
+  "nextFiscalYearEnd": 1798675200,
+  "nonDilutedMarketCap": 1501301955407,
+  "numberOfAnalystOpinions": 38,
+  "open": 384.899,
+  "operatingCashflow": 18684999680,
+  "operatingMargins": 0.014099999,
+  "overallRisk": 10,
+  "payoutRatio": 0.0,
+  "pegRatio": 4.45,
+  "phone": "512 516 8177",
+  "postMarketChange": 0.480011,
+  "postMarketChangePercent": 0.12899707,
+  "postMarketPrice": 372.59,
+  "postMarketTime": 1790380799,
+  "previousClose": 377.94,
+  "priceEpsCurrentYear": 210.79016,
+  "priceHint": 2,
+  "priceToBook": 16.917934,
+  "priceToSalesTrailing12Months": 14.183364,
+  "profitMargins": 0.03671,
+  "quickRatio": 1.347,
+  "quoteSourceName": "Nasdaq Real Time Price",
+  "quoteType": "EQUITY",
+  "recommendationKey": "buy",
+  "recommendationMean": 2.34884,
+  "region": "US",
+  "regularMarketChange": -5.83002,
+  "regularMarketChangePercent": -1.54258,
+  "regularMarketDayHigh": 386.83,
+  "regularMarketDayLow": 367.67,
+  "regularMarketDayRange": "367.67 - 386.83",
+  "regularMarketOpen": 384.899,
+  "regularMarketPreviousClose": 377.94,
+  "regularMarketPrice": 372.11,
+  "regularMarketTime": 1790366400,
+  "regularMarketVolume": 44753533,
+  "returnOnAssets": 0.019299999,
+  "returnOnEquity": 0.046669997,
+  "revenueGrowth": 0.255,
+  "revenuePerShare": 32.055,
+  "sector": "Consumer Cyclical",
+  "sectorDisp": "Consumer Cyclical",
+  "sectorKey": "consumer-cyclical",
+  "shareHolderRightsRisk": 9,
+  "sharesOutstanding": 3949547394,
+  "sharesPercentSharesOut": 0.0174,
+  "sharesShort": 68862357,
+  "sharesShortPreviousMonthDate": 1786665600,
+  "sharesShortPriorMonth": 69196896,
+  "shortName": "Tesla, Inc.",
+  "shortPercentOfFloat": 0.0195,
+  "shortRatio": 1.79,
+  "sourceInterval": 15,
+  "state": "TX",
+  "symbol": "TSLA",
+  "targetHighPrice": 600.0,
+  "targetLowPrice": 125.0,
+  "targetMeanPrice": 396.62158,
+  "targetMedianPrice": 415.0,
+  "totalCash": 43524001792,
+  "totalCashPerShare": 11.02,
+  "totalDebt": 16080000000,
+  "totalRevenue": 103619002368,
+  "tradeable": false,
+  "trailingAnnualDividendRate": 0.0,
+  "trailingAnnualDividendYield": 0.0,
+  "trailingEps": 1.08,
+  "trailingPE": 344.54626,
+  "trailingPegRatio": 4.5442,
+  "triggerable": true,
+  "twoHundredDayAverage": 395.62204,
+  "twoHundredDayAverageChange": -23.512054,
+  "twoHundredDayAverageChangePercent": -0.0594306,
+  "typeDisp": "Equity",
+  "volume": 44753533,
+  "website": "https://www.tesla.com",
+  "zip": "78725"
+ },
+ "note": "reverse DCF finds no growth rate that reaches the price",
+ "recorded_at": "2026-09-27",
+ "symbol": "TSLA"
+}
