@@ -31,3 +31,15 @@ jobs:
 
       - name: Run tests
         run: pytest -v
+
+      # The E2E suite regenerates tests/e2e/__snapshots__/valuation_report.md
+      # and fails if it differs from the committed copy, so reaching this step
+      # means the two match. Uploading it puts the actual valuations one click
+      # away from the check, rather than only in the diff.
+      - name: Upload valuation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: valuation-report-py${{ matrix.python-version }}
+          path: tests/e2e/__snapshots__/valuation_report.md
+          if-no-files-found: error
