@@ -1,0 +1,29 @@
+{
+ "cashflow": {
+  "columns": [],
+  "data": [],
+  "index": []
+ },
+ "financials": {
+  "columns": [],
+  "data": [],
+  "index": []
+ },
+ "info": {
+  "cryptoTradeable": false,
+  "customPriceAlertConfidence": "NONE",
+  "esgPopulated": false,
+  "financialCurrency": "USD",
+  "hasPrePostMarketData": false,
+  "language": "en-US",
+  "quoteType": "NONE",
+  "region": "US",
+  "symbol": "KRTX",
+  "tradeable": false,
+  "trailingPegRatio": null,
+  "triggerable": false
+ },
+ "note": "acquired and delisted, no financials at all",
+ "recorded_at": "2026-09-27",
+ "symbol": "KRTX"
+}

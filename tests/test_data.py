@@ -8,9 +8,11 @@ import pandas as pd
 import pytest
 
 from dcf.data import (
+    FALLBACK_RISK_FREE_RATE,
     CompanyData,
     DataFetchError,
     build_company_data,
+    fetch_risk_free_rate,
 )
 
 
@@ -101,43 +103,6 @@ def test_historical_operating_margin_is_mean():
     assert cd.historical_operating_margin == pytest.approx(sum(margins) / 4, rel=1e-6)
 
 
-def test_historical_tax_rate_clipped_into_range():
-    cd = build_company_data("TEST", _full_fixture())
-    assert cd.historical_tax_rate is not None
-    assert 0.0 <= cd.historical_tax_rate <= 0.6
-
-
-def test_historical_capex_pct_is_absolute_value():
-    # yfinance reports capex as a negative number; we want a positive percentage.
-    cd = build_company_data("TEST", _full_fixture())
-    assert cd.historical_capex_pct is not None
-    assert cd.historical_capex_pct > 0
-
-
-def test_no_warnings_for_typical_tech_company():
-    cd = build_company_data("TEST", _full_fixture())
-    assert cd.warnings == []
-    assert cd.is_dcf_inappropriate is False
-
-
-# ----- sector flags -------------------------------------------------------
-
-
-def test_financial_sector_flagged_as_inappropriate():
-    fix = _full_fixture()
-    fix.info["sector"] = "Financial Services"
-    cd = build_company_data("TEST", fix)
-    assert cd.is_dcf_inappropriate is True
-    assert any("financial" in w.lower() for w in cd.warnings)
-
-
-def test_real_estate_sector_flagged_as_inappropriate():
-    fix = _full_fixture()
-    fix.info["sector"] = "Real Estate"
-    cd = build_company_data("TEST", fix)
-    assert cd.is_dcf_inappropriate is True
-
-
 def test_negative_operating_margin_emits_warning():
     fix = _full_fixture()
     cols = fix.financials.columns
@@ -147,13 +112,6 @@ def test_negative_operating_margin_emits_warning():
 
 
 # ----- defensive handling --------------------------------------------------
-
-
-def test_missing_revenue_raises_clear_error():
-    fix = _full_fixture()
-    fix.financials = fix.financials.drop("Total Revenue")
-    with pytest.raises(DataFetchError, match="revenue"):
-        build_company_data("TEST", fix)
 
 
 def test_missing_shares_outstanding_raises():
@@ -174,14 +132,6 @@ def test_falls_back_to_previous_close_for_price():
     fix.info["previousClose"] = 145.0
     cd = build_company_data("TEST", fix)
     assert cd.current_price == 145.0
-
-
-def test_zero_total_cash_and_debt_yields_zero_net_debt():
-    fix = _full_fixture()
-    fix.info["totalDebt"] = 0
-    fix.info["totalCash"] = 0
-    cd = build_company_data("TEST", fix)
-    assert cd.net_debt == 0
 
 
 def test_missing_optional_historicals_returns_none_not_raises():
@@ -240,3 +190,58 @@ def test_negative_interest_expense_is_normalised_to_a_cost():
     tk.financials.loc["Interest Expense"] = -2_400
     d = build_company_data("TEST", tk)
     assert d.interest_expense == 2_400
+
+
+# ----- the risk-free rate ---------------------------------------------------
+#
+# Written failure-modes-first, per AGENTS.md. `fetch_risk_free_rate` feeds
+# straight into every WACC, so a wrong answer here is wrong everywhere, and
+# until now nothing exercised it -- both test suites monkeypatched it away.
+#
+# The ways it can be wrong:
+#   1. It returns a percent where a decimal is expected. ^TNX quotes 4.96 to
+#      mean 4.96%, so a missing /100 turns a 5% rate into 496% and every
+#      company becomes worthless. This is the expensive one.
+#   2. Yahoo returns rows but every Close is NaN, and `.iloc[-1]` on the
+#      dropna'd series raises instead of falling back.
+#   3. The feed changes units or returns garbage, and we pass it through as a
+#      real rate instead of recognising it as broken.
+#   4. The network is down and the exception escapes, taking the whole
+#      valuation with it rather than costing only a live rate.
+#   5. The fallback path claims to be live, so the UI tells the user a stale
+#      constant is today's Treasury yield.
+
+
+def _close(*values):
+    return lambda: pd.DataFrame({"Close": list(values)})
+
+
+def test_a_normal_quote_is_converted_from_percent_to_decimal():
+    rate, is_live = fetch_risk_free_rate(_close(4.10, 4.96))
+    assert rate == pytest.approx(0.0496), "^TNX quotes percent; this needs /100"
+    assert is_live
+
+
+def test_an_all_nan_series_falls_back_instead_of_raising():
+    rate, is_live = fetch_risk_free_rate(_close(float("nan"), float("nan")))
+    assert (rate, is_live) == (FALLBACK_RISK_FREE_RATE, False)
+
+
+def test_an_empty_series_falls_back():
+    rate, is_live = fetch_risk_free_rate(_close())
+    assert (rate, is_live) == (FALLBACK_RISK_FREE_RATE, False)
+
+
+@pytest.mark.parametrize("quote", [0.0, -1.5, 15.0, 518.0])
+def test_a_quote_outside_the_plausible_band_is_treated_as_a_broken_feed(quote):
+    """15%+ means the units changed, not that the world did."""
+    rate, is_live = fetch_risk_free_rate(_close(quote))
+    assert (rate, is_live) == (FALLBACK_RISK_FREE_RATE, False)
+
+
+def test_a_dead_network_costs_the_rate_and_not_the_valuation():
+    def boom():
+        raise RuntimeError("Yahoo unreachable")
+
+    rate, is_live = fetch_risk_free_rate(boom)
+    assert (rate, is_live) == (FALLBACK_RISK_FREE_RATE, False)

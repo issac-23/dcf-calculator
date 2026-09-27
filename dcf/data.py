@@ -9,7 +9,7 @@ testable. The `fetch_company_data` function is the one entry point;
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Optional, Protocol
+from typing import Callable, List, Optional, Protocol
 
 import pandas as pd
 
@@ -177,17 +177,25 @@ _RISK_FREE_TICKER = "^TNX"
 FALLBACK_RISK_FREE_RATE = 0.042
 
 
-def fetch_risk_free_rate() -> tuple[float, bool]:
+def fetch_risk_free_rate(history: Optional[Callable[[], pd.DataFrame]] = None) -> tuple[float, bool]:
     """Return (rate, is_live). ^TNX quotes in percent, so 4.96 means 4.96%.
 
     Deliberately separate from fetch_company_data: this is one shared market
     rate rather than a property of the company, and it should be cached and
     fail on its own. A dead Treasury quote must not take a valuation with it.
+
+    `history` injects the price fetch, the same way `_TickerLike` injects the
+    company fetch. Defaults to the live yfinance call.
     """
     try:
-        import yfinance as yf
+        if history is None:
 
-        hist = yf.Ticker(_RISK_FREE_TICKER).history(period="5d")
+            def history():  # pragma: no cover - the live network call
+                import yfinance as yf
+
+                return yf.Ticker(_RISK_FREE_TICKER).history(period="5d")
+
+        hist = history()
         close = hist["Close"].dropna()
         if close.empty:
             return FALLBACK_RISK_FREE_RATE, False

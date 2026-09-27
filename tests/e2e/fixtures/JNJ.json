@@ -1,0 +1,1027 @@
+{
+ "cashflow": {
+  "columns": [
+   "2025-12-31T00:00:00",
+   "2024-12-31T00:00:00",
+   "2023-12-31T00:00:00",
+   "2022-12-31T00:00:00"
+  ],
+  "data": [
+   [
+    19313000000.0,
+    18059000000.0,
+    17778000000.0,
+    17185000000.0
+   ],
+   [
+    -5953000000.0,
+    -2432000000.0,
+    -5054000000.0,
+    -6035000000.0
+   ],
+   [
+    -14087000000.0,
+    -11886000000.0,
+    -24524000000.0,
+    -8684000000.0
+   ],
+   [
+    23724000000.0,
+    21937000000.0,
+    21790000000.0,
+    16136000000.0
+   ],
+   [
+    0.0,
+    0.0,
+    4241000000.0,
+    0.0
+   ],
+   [
+    -5217000000.0,
+    -6207000000.0,
+    -5013000000.0,
+    -4009000000.0
+   ],
+   [
+    1977000000.0,
+    1990000000.0,
+    1836000000.0,
+    982000000.0
+   ],
+   [
+    6539000000.0,
+    6714000000.0,
+    8574000000.0,
+    5223000000.0
+   ],
+   [
+    19709000000.0,
+    24105000000.0,
+    21859000000.0,
+    14127000000.0
+   ],
+   [
+    24105000000.0,
+    21859000000.0,
+    14127000000.0,
+    14487000000.0
+   ],
+   [
+    201000000.0,
+    -289000000.0,
+    -112000000.0,
+    -312000000.0
+   ],
+   [
+    -4597000000.0,
+    2535000000.0,
+    7844000000.0,
+    -48000000.0
+   ],
+   [
+    -5539000000.0,
+    -3132000000.0,
+    -15825000000.0,
+    -8871000000.0
+   ],
+   [
+    -5539000000.0,
+    -3132000000.0,
+    -15825000000.0,
+    -8871000000.0
+   ],
+   [
+    -260000000.0,
+    234000000.0,
+    -1602000000.0,
+    65000000.0
+   ],
+   [
+    3418000000.0,
+    838000000.0,
+    1094000000.0,
+    1329000000.0
+   ],
+   [
+    -12381000000.0,
+    -11823000000.0,
+    -11770000000.0,
+    -11682000000.0
+   ],
+   [
+    -12381000000.0,
+    -11823000000.0,
+    -11770000000.0,
+    -11682000000.0
+   ],
+   [
+    -5953000000.0,
+    -2432000000.0,
+    -813000000.0,
+    -6035000000.0
+   ],
+   [
+    -5953000000.0,
+    -2432000000.0,
+    -5054000000.0,
+    -6035000000.0
+   ],
+   [
+    0.0,
+    0.0,
+    4241000000.0,
+    0.0
+   ],
+   [
+    9637000000.0,
+    10051000000.0,
+    -2734000000.0,
+    7452000000.0
+   ],
+   [
+    2256000000.0,
+    5814000000.0,
+    -1183000000.0,
+    9584000000.0
+   ],
+   [
+    -12330000000.0,
+    -9463000000.0,
+    -22973000000.0,
+    -6550000000.0
+   ],
+   [
+    14586000000.0,
+    15277000000.0,
+    21790000000.0,
+    16134000000.0
+   ],
+   [
+    7381000000.0,
+    4237000000.0,
+    -1551000000.0,
+    -2132000000.0
+   ],
+   [
+    -1757000000.0,
+    -2423000000.0,
+    -1551000000.0,
+    -2134000000.0
+   ],
+   [
+    9138000000.0,
+    6660000000.0,
+    0.0,
+    2000000.0
+   ],
+   [
+    -23588000000.0,
+    -18599000000.0,
+    878000000.0,
+    -12371000000.0
+   ],
+   [
+    -23588000000.0,
+    -18599000000.0,
+    878000000.0,
+    -12371000000.0
+   ],
+   [
+    -1571000000.0,
+    2018000000.0,
+    -2593000000.0,
+    65000000.0
+   ],
+   [
+    741000000.0,
+    736000000.0,
+    8484000000.0,
+    9225000000.0
+   ],
+   [
+    1661000000.0,
+    2462000000.0,
+    19390000000.0,
+    41609000000.0
+   ],
+   [
+    -920000000.0,
+    -1726000000.0,
+    -10906000000.0,
+    -32384000000.0
+   ],
+   [
+    -17541000000.0,
+    -15146000000.0,
+    0.0,
+    -17652000000.0
+   ],
+   [
+    -17541000000.0,
+    -15146000000.0,
+    0.0,
+    -17652000000.0
+   ],
+   [
+    -385000000.0,
+    -1783000000.0,
+    -470000000.0,
+    0.0
+   ],
+   [
+    -385000000.0,
+    -1783000000.0,
+    -470000000.0,
+    0.0
+   ],
+   [
+    -4832000000.0,
+    -4424000000.0,
+    -4543000000.0,
+    -4009000000.0
+   ],
+   [
+    -4832000000.0,
+    -4424000000.0,
+    -4543000000.0,
+    -4009000000.0
+   ],
+   [
+    24530000000.0,
+    24266000000.0,
+    22791000000.0,
+    21194000000.0
+   ],
+   [
+    24530000000.0,
+    24266000000.0,
+    22791000000.0,
+    21194000000.0
+   ],
+   [
+    -12718000000.0,
+    1837000000.0,
+    2507000000.0,
+    -4011000000.0
+   ],
+   [
+    -5697000000.0,
+    33000000.0,
+    5588000000.0,
+    -1979000000.0
+   ],
+   [
+    -6167000000.0,
+    1717000000.0,
+    -3480000000.0,
+    687000000.0
+   ],
+   [
+    2377000000.0,
+    1621000000.0,
+    2346000000.0,
+    1098000000.0
+   ],
+   [
+    -1450000000.0,
+    -1128000000.0,
+    -1323000000.0,
+    -2527000000.0
+   ],
+   [
+    -1781000000.0,
+    -406000000.0,
+    -624000000.0,
+    -1290000000.0
+   ],
+   [
+    -1781000000.0,
+    -406000000.0,
+    -624000000.0,
+    -1290000000.0
+   ],
+   [
+    109000000.0,
+    1841000000.0,
+    483000000.0,
+    null
+   ],
+   [
+    1354000000.0,
+    1176000000.0,
+    1162000000.0,
+    1138000000.0
+   ],
+   [
+    -1000000.0,
+    11000000.0,
+    0.0,
+    -17000000.0
+   ],
+   [
+    204000000.0,
+    405000000.0,
+    1295000000.0,
+    1216000000.0
+   ],
+   [
+    1538000000.0,
+    -2183000000.0,
+    -4194000000.0,
+    -1663000000.0
+   ],
+   [
+    1538000000.0,
+    -2183000000.0,
+    -4194000000.0,
+    -1663000000.0
+   ],
+   [
+    7503000000.0,
+    7339000000.0,
+    7486000000.0,
+    6970000000.0
+   ],
+   [
+    7503000000.0,
+    7339000000.0,
+    7486000000.0,
+    6970000000.0
+   ],
+   [
+    -263000000.0,
+    -226000000.0,
+    -21101000000.0,
+    -380000000.0
+   ],
+   [
+    -263000000.0,
+    -226000000.0,
+    -21101000000.0,
+    -380000000.0
+   ],
+   [
+    26804000000.0,
+    14066000000.0,
+    35153000000.0,
+    17941000000.0
+   ]
+  ],
+  "index": [
+   "Free Cash Flow",
+   "Repurchase Of Capital Stock",
+   "Repayment Of Debt",
+   "Issuance Of Debt",
+   "Issuance Of Capital Stock",
+   "Capital Expenditure",
+   "Interest Paid Supplemental Data",
+   "Income Tax Paid Supplemental Data",
+   "End Cash Position",
+   "Beginning Cash Position",
+   "Effect Of Exchange Rate Changes",
+   "Changes In Cash",
+   "Financing Cash Flow",
+   "Cash Flow From Continuing Financing Activities",
+   "Net Other Financing Charges",
+   "Proceeds From Stock Option Exercised",
+   "Cash Dividends Paid",
+   "Common Stock Dividend Paid",
+   "Net Common Stock Issuance",
+   "Common Stock Payments",
+   "Common Stock Issuance",
+   "Net Issuance Payments Of Debt",
+   "Net Short Term Debt Issuance",
+   "Short Term Debt Payments",
+   "Short Term Debt Issuance",
+   "Net Long Term Debt Issuance",
+   "Long Term Debt Payments",
+   "Long Term Debt Issuance",
+   "Investing Cash Flow",
+   "Cash Flow From Continuing Investing Activities",
+   "Net Other Investing Changes",
+   "Net Investment Purchase And Sale",
+   "Sale Of Investment",
+   "Purchase Of Investment",
+   "Net Business Purchase And Sale",
+   "Purchase Of Business",
+   "Net Intangibles Purchase And Sale",
+   "Purchase Of Intangibles",
+   "Net PPE Purchase And Sale",
+   "Purchase Of PPE",
+   "Operating Cash Flow",
+   "Cash Flow From Continuing Operating Activities",
+   "Change In Working Capital",
+   "Change In Other Current Liabilities",
+   "Change In Other Current Assets",
+   "Change In Payables And Accrued Expense",
+   "Change In Inventory",
+   "Change In Receivables",
+   "Changes In Account Receivables",
+   "Other Non Cash Items",
+   "Stock Based Compensation",
+   "Provisionand Write Offof Assets",
+   "Asset Impairment Charge",
+   "Deferred Tax",
+   "Deferred Income Tax",
+   "Depreciation Amortization Depletion",
+   "Depreciation And Amortization",
+   "Operating Gains Losses",
+   "Gain Loss On Sale Of Business",
+   "Net Income From Continuing Operations"
+  ]
+ },
+ "financials": {
+  "columns": [
+   "2025-12-31T00:00:00",
+   "2024-12-31T00:00:00",
+   "2023-12-31T00:00:00",
+   "2022-12-31T00:00:00",
+   "2021-12-31T00:00:00"
+  ],
+  "data": [
+   [
+    1044544581.197631,
+    -1106546713.010128,
+    -92230000.0,
+    -162932000.0,
+    null
+   ],
+   [
+    0.177312,
+    0.157068,
+    0.115,
+    0.154,
+    null
+   ],
+   [
+    35164000000.0,
+    31826000000.0,
+    24122000000.0,
+    27663000000.0,
+    null
+   ],
+   [
+    5891000000.0,
+    -7045000000.0,
+    -802000000.0,
+    -1058000000.0,
+    null
+   ],
+   [
+    5891000000.0,
+    -7045000000.0,
+    -802000000.0,
+    -1058000000.0,
+    null
+   ],
+   [
+    26804000000.0,
+    14066000000.0,
+    13326000000.0,
+    16370000000.0,
+    null
+   ],
+   [
+    7503000000.0,
+    7339000000.0,
+    7486000000.0,
+    6970000000.0,
+    null
+   ],
+   [
+    30256000000.0,
+    27471000000.0,
+    26553000000.0,
+    24596000000.0,
+    null
+   ],
+   [
+    41055000000.0,
+    24781000000.0,
+    23320000000.0,
+    26605000000.0,
+    null
+   ],
+   [
+    33552000000.0,
+    17442000000.0,
+    15834000000.0,
+    19635000000.0,
+    null
+   ],
+   [
+    85000000.0,
+    577000000.0,
+    489000000.0,
+    214000000.0,
+    null
+   ],
+   [
+    971000000.0,
+    755000000.0,
+    772000000.0,
+    276000000.0,
+    null
+   ],
+   [
+    1056000000.0,
+    1332000000.0,
+    1261000000.0,
+    490000000.0,
+    null
+   ],
+   [
+    21957544581.19763,
+    20004453286.989872,
+    14035770000.0,
+    17265068000.0,
+    null
+   ],
+   [
+    26804000000.0,
+    14066000000.0,
+    35153000000.0,
+    17941000000.0,
+    null
+   ],
+   [
+    68597000000.0,
+    67572000000.0,
+    63150000000.0,
+    58977000000.0,
+    null
+   ],
+   [
+    2429400000.0,
+    2429400000.0,
+    2560400000.0,
+    2663900000.0,
+    null
+   ],
+   [
+    2407939000.0,
+    2406922000.0,
+    2407078000.0,
+    2613597000.0,
+    null
+   ],
+   [
+    11.03,
+    5.79,
+    13.72,
+    6.73,
+    null
+   ],
+   [
+    11.131511,
+    5.843978,
+    14.604014,
+    6.862158,
+    null
+   ],
+   [
+    26804000000.0,
+    14066000000.0,
+    35153000000.0,
+    17941000000.0,
+    null
+   ],
+   [
+    26804000000.0,
+    14066000000.0,
+    35153000000.0,
+    17941000000.0,
+    null
+   ],
+   [
+    26804000000.0,
+    14066000000.0,
+    35153000000.0,
+    17941000000.0,
+    null
+   ],
+   [
+    26804000000.0,
+    14066000000.0,
+    35153000000.0,
+    17941000000.0,
+    null
+   ],
+   [
+    0.0,
+    0.0,
+    21827000000.0,
+    1571000000.0,
+    null
+   ],
+   [
+    26804000000.0,
+    14066000000.0,
+    13326000000.0,
+    16370000000.0,
+    null
+   ],
+   [
+    5777000000.0,
+    2621000000.0,
+    1736000000.0,
+    2989000000.0,
+    null
+   ],
+   [
+    32581000000.0,
+    16687000000.0,
+    15062000000.0,
+    19359000000.0,
+    null
+   ],
+   [
+    6891000000.0,
+    -5145000000.0,
+    -7436000000.0,
+    -1868000000.0,
+    null
+   ],
+   [
+    1000000000.0,
+    1900000000.0,
+    -6634000000.0,
+    -810000000.0,
+    null
+   ],
+   [
+    5491000000.0,
+    -6745000000.0,
+    -802000000.0,
+    -1058000000.0,
+    null
+   ],
+   [
+    -6000000000.0,
+    5500000000.0,
+    7300000000.0,
+    2600000000.0,
+    null
+   ],
+   [
+    81000000.0,
+    211000000.0,
+    313000000.0,
+    783000000.0,
+    null
+   ],
+   [
+    428000000.0,
+    1034000000.0,
+    489000000.0,
+    275000000.0,
+    null
+   ],
+   [
+    400000000.0,
+    -300000000.0,
+    -600000000.0,
+    -700000000.0,
+    null
+   ],
+   [
+    85000000.0,
+    577000000.0,
+    489000000.0,
+    214000000.0,
+    null
+   ],
+   [
+    971000000.0,
+    755000000.0,
+    772000000.0,
+    276000000.0,
+    null
+   ],
+   [
+    1056000000.0,
+    1332000000.0,
+    1261000000.0,
+    490000000.0,
+    null
+   ],
+   [
+    25596000000.0,
+    21249000000.0,
+    22009000000.0,
+    21013000000.0,
+    null
+   ],
+   [
+    38341000000.0,
+    40101000000.0,
+    36597000000.0,
+    34381000000.0,
+    null
+   ],
+   [
+    14665000000.0,
+    17232000000.0,
+    15085000000.0,
+    14135000000.0,
+    null
+   ],
+   [
+    23676000000.0,
+    22869000000.0,
+    21512000000.0,
+    20246000000.0,
+    null
+   ],
+   [
+    null,
+    22869000000.0,
+    21512000000.0,
+    20246000000.0,
+    20118000000.0
+   ],
+   [
+    null,
+    22869000000.0,
+    21512000000.0,
+    20246000000.0,
+    20118000000.0
+   ],
+   [
+    null,
+    -900000000.0,
+    -1400000000.0,
+    -1200000000.0,
+    -600000000.0
+   ],
+   [
+    63937000000.0,
+    61350000000.0,
+    58606000000.0,
+    55394000000.0,
+    null
+   ],
+   [
+    30256000000.0,
+    27471000000.0,
+    26553000000.0,
+    24596000000.0,
+    null
+   ],
+   [
+    94193000000.0,
+    88821000000.0,
+    85159000000.0,
+    79990000000.0,
+    null
+   ],
+   [
+    94193000000.0,
+    88821000000.0,
+    85159000000.0,
+    79990000000.0,
+    null
+   ]
+  ],
+  "index": [
+   "Tax Effect Of Unusual Items",
+   "Tax Rate For Calcs",
+   "Normalized EBITDA",
+   "Total Unusual Items",
+   "Total Unusual Items Excluding Goodwill",
+   "Net Income From Continuing Operation Net Minority Interest",
+   "Reconciled Depreciation",
+   "Reconciled Cost Of Revenue",
+   "EBITDA",
+   "EBIT",
+   "Net Interest Income",
+   "Interest Expense",
+   "Interest Income",
+   "Normalized Income",
+   "Net Income From Continuing And Discontinued Operation",
+   "Total Expenses",
+   "Diluted Average Shares",
+   "Basic Average Shares",
+   "Diluted EPS",
+   "Basic EPS",
+   "Diluted NI Availto Com Stockholders",
+   "Net Income Common Stockholders",
+   "Net Income",
+   "Net Income Including Noncontrolling Interests",
+   "Net Income Discontinuous Operations",
+   "Net Income Continuous Operations",
+   "Tax Provision",
+   "Pretax Income",
+   "Other Income Expense",
+   "Other Non Operating Income Expenses",
+   "Special Income Charges",
+   "Other Special Charges",
+   "Impairment Of Capital Assets",
+   "Restructuring And Mergern Acquisition",
+   "Gain On Sale Of Security",
+   "Net Non Operating Interest Income Expense",
+   "Interest Expense Non Operating",
+   "Interest Income Non Operating",
+   "Operating Income",
+   "Operating Expense",
+   "Research And Development",
+   "Selling General And Administration",
+   "General And Administrative Expense",
+   "Other Gand A",
+   "Salaries And Wages",
+   "Gross Profit",
+   "Cost Of Revenue",
+   "Total Revenue",
+   "Operating Revenue"
+  ]
+ },
+ "info": {
+  "52WeekChange": 0.49333775,
+  "SandP52WeekChange": 0.15656614,
+  "address1": "One Johnson & Johnson Plaza",
+  "allTimeHigh": 281.07,
+  "allTimeLow": 0.142361,
+  "ask": 272.25,
+  "askSize": 200,
+  "auditRisk": 4,
+  "averageAnalystRating": "1.9 - Buy",
+  "averageDailyVolume10Day": 6511380,
+  "averageDailyVolume3Month": 7044396,
+  "averageVolume": 7044396,
+  "averageVolume10days": 6511380,
+  "beta": 0.235,
+  "bid": 269.86,
+  "bidSize": 200,
+  "boardRisk": 7,
+  "bookValue": 35.284,
+  "city": "New Brunswick",
+  "compensationAsOfEpochDate": 1767139200,
+  "compensationRisk": 4,
+  "country": "United States",
+  "cryptoTradeable": false,
+  "currency": "USD",
+  "currentPrice": 271.22,
+  "currentRatio": 1.089,
+  "customPriceAlertConfidence": "HIGH",
+  "dateShortInterest": 1789430400,
+  "dayHigh": 272.2459,
+  "dayLow": 269.2573,
+  "debtToEquity": 57.709,
+  "dividendDate": 1788825600,
+  "dividendRate": 5.36,
+  "dividendYield": 1.98,
+  "earningsCallTimestampEnd": 1791921600,
+  "earningsCallTimestampStart": 1791921600,
+  "earningsGrowth": -0.009,
+  "earningsQuarterlyGrowth": -0.001,
+  "earningsTimestamp": 1791894600,
+  "earningsTimestampEnd": 1791894600,
+  "earningsTimestampStart": 1791894600,
+  "ebitda": 34872000512,
+  "ebitdaMargins": 0.35609,
+  "enterpriseToEbitda": 19.554,
+  "enterpriseToRevenue": 6.963,
+  "enterpriseValue": 681890676736,
+  "epsCurrentYear": 11.07333,
+  "epsForward": 12.138,
+  "epsTrailingTwelveMonths": 8.62,
+  "esgPopulated": false,
+  "exDividendDate": 1787616000,
+  "exchange": "NYQ",
+  "exchangeDataDelayedBy": 0,
+  "exchangeTimezoneName": "America/New_York",
+  "exchangeTimezoneShortName": "EDT",
+  "fiftyDayAverage": 264.9694,
+  "fiftyDayAverageChange": 6.2506104,
+  "fiftyDayAverageChangePercent": 0.023589933,
+  "fiftyTwoWeekChangePercent": 49.333775,
+  "fiftyTwoWeekHigh": 281.07,
+  "fiftyTwoWeekHighChange": -9.850006,
+  "fiftyTwoWeekHighChangePercent": -0.03504467,
+  "fiftyTwoWeekLow": 179.8,
+  "fiftyTwoWeekLowChange": 91.42,
+  "fiftyTwoWeekLowChangePercent": 0.50845385,
+  "fiftyTwoWeekRange": "179.8 - 281.07",
+  "financialCurrency": "USD",
+  "firstTradeDateMilliseconds": -252322200000,
+  "fiveYearAvgDividendYield": 2.75,
+  "floatShares": 2405994561,
+  "forwardEps": 12.138,
+  "forwardPE": 22.344704,
+  "freeCashflow": 16885125120,
+  "fullExchangeName": "NYSE",
+  "fullTimeEmployees": 138200,
+  "fulldayChange": 0.540009,
+  "fulldayChangePercent": 0.199501,
+  "fulldayPrice": 272.0,
+  "gmtOffSetMilliseconds": -14400000,
+  "governanceEpochDate": 1788220800,
+  "grossMargins": 0.6814,
+  "grossProfits": 66729000960,
+  "hasPrePostMarketData": true,
+  "heldPercentInsiders": 0.00053,
+  "heldPercentInstitutions": 0.76725,
+  "impliedSharesOutstanding": 2409898597,
+  "industry": "Drug Manufacturers - General",
+  "industryDisp": "Drug Manufacturers - General",
+  "industryKey": "drug-manufacturers-general",
+  "irWebsite": "http://www.investor.jnj.com/investor-relations.cfm",
+  "isEarningsDateEstimate": false,
+  "language": "en-US",
+  "lastDividendDate": 1787616000,
+  "lastDividendValue": 1.34,
+  "lastFiscalYearEnd": 1766880000,
+  "lastSplitDate": 992390400,
+  "lastSplitFactor": "2:1",
+  "longBusinessSummary": "Johnson & Johnson, together with its subsidiaries, engages in the research and development, manufacture, and sale of a range of products in the healthcare field worldwide. It operates in two segments, Innovative Medicine and MedTech. The Innovative Medicine segment offers products for various therapeutic areas, such as oncology, immunology, neuroscience, pulmonary hypertension, infectious diseases, and cardiovascular and metabolism distributed through retailers, wholesalers, distributors, hospitals, and healthcare professionals for prescription use. The MedTech segment provides a portfolio of products used in the surgery, orthopedic, cardiovascular, and vision fields distributed through wholesalers, hospitals and retailers, and used in the professional fields by physicians, nurses, hospitals, eye care professionals and clinics. This segment also offers products and enabling technologies that support joint reconstruction, trauma, spine, sports related injuries, and others, as well as open, laparoscopic, and robotic surgical procedures; instrumentation, energy devices, stapling systems, wound closure, biosurgery products, and digital and robotic technologies; breast aesthetics and reconstruction; contact lenses under the ACUVUE brand; intraocular lenses for cataract surgery, and other products used in cataract and refractive procedures under the TECNIS brand. The company was founded in 1886 and is based in New Brunswick, New Jersey.",
+  "longName": "Johnson & Johnson",
+  "market": "us_market",
+  "marketCap": 653612679168,
+  "marketState": "CLOSED",
+  "maxAge": 86400,
+  "messageBoardId": "finmb_139677",
+  "mostRecentQuarter": 1782604800,
+  "netIncomeToCommon": 21037000704,
+  "nextFiscalYearEnd": 1798416000,
+  "nonDilutedMarketCap": 648720603326,
+  "numberOfAnalystOpinions": 22,
+  "open": 271.7,
+  "operatingCashflow": 27608000512,
+  "operatingMargins": 0.2919,
+  "overallRisk": 4,
+  "payoutRatio": 0.6079,
+  "pegRatio": 2.84,
+  "phone": "732 524 0400",
+  "postMarketChange": 0.7799988,
+  "postMarketChangePercent": 0.28758895,
+  "postMarketPrice": 272.0,
+  "postMarketTime": 1790376803,
+  "previousClose": 270.68,
+  "priceEpsCurrentYear": 24.493084,
+  "priceHint": 2,
+  "priceToBook": 7.68677,
+  "priceToSalesTrailing12Months": 6.6743526,
+  "profitMargins": 0.21482,
+  "quickRatio": 0.725,
+  "quoteSourceName": "Delayed Quote",
+  "quoteType": "EQUITY",
+  "recommendationKey": "buy",
+  "recommendationMean": 1.91304,
+  "region": "US",
+  "regularMarketChange": 0.540009,
+  "regularMarketChangePercent": 0.199501,
+  "regularMarketDayHigh": 272.2459,
+  "regularMarketDayLow": 269.2573,
+  "regularMarketDayRange": "269.2573 - 272.2459",
+  "regularMarketOpen": 271.7,
+  "regularMarketPreviousClose": 270.68,
+  "regularMarketPrice": 271.22,
+  "regularMarketTime": 1790366402,
+  "regularMarketVolume": 4059419,
+  "returnOnAssets": 0.08595,
+  "returnOnEquity": 0.25742,
+  "revenueGrowth": 0.066,
+  "revenuePerShare": 40.667,
+  "sector": "Healthcare",
+  "sectorDisp": "Healthcare",
+  "sectorKey": "healthcare",
+  "shareHolderRightsRisk": 3,
+  "sharesOutstanding": 2409898597,
+  "sharesPercentSharesOut": 0.0088,
+  "sharesShort": 21188522,
+  "sharesShortPreviousMonthDate": 1786665600,
+  "sharesShortPriorMonth": 21591738,
+  "shortName": "Johnson & Johnson",
+  "shortPercentOfFloat": 0.0098,
+  "shortRatio": 3.42,
+  "sourceInterval": 15,
+  "state": "NJ",
+  "symbol": "JNJ",
+  "targetHighPrice": 320.0,
+  "targetLowPrice": 190.0,
+  "targetMeanPrice": 277.9091,
+  "targetMedianPrice": 282.0,
+  "totalCash": 20757999616,
+  "totalCashPerShare": 8.614,
+  "totalDebt": 49036001280,
+  "totalRevenue": 97929003008,
+  "tradeable": false,
+  "trailingAnnualDividendRate": 5.24,
+  "trailingAnnualDividendYield": 0.019358652,
+  "trailingEps": 8.62,
+  "trailingPE": 31.464037,
+  "trailingPegRatio": 2.8229,
+  "triggerable": true,
+  "twoHundredDayAverage": 240.3236,
+  "twoHundredDayAverageChange": 30.896408,
+  "twoHundredDayAverageChangePercent": 0.12856169,
+  "typeDisp": "Equity",
+  "volume": 4059419,
+  "website": "https://www.jnj.com",
+  "zip": "08933"
+ },
+ "note": "low beta, mature, model lands near market",
+ "recorded_at": "2026-09-27",
+ "symbol": "JNJ"
+}

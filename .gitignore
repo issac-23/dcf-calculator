@@ -12,3 +12,7 @@ env/
 *.log
 
 .claude/
+
+# coverage
+.coverage
+htmlcov/
