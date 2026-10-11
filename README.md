@@ -2,57 +2,61 @@
 
 [![tests](https://github.com/issac-23/dcf-calculator/actions/workflows/tests.yml/badge.svg)](https://github.com/issac-23/dcf-calculator/actions/workflows/tests.yml)
 
-A discounted cash flow valuation tool for public equities. Pulls real
-financials from Yahoo Finance, runs a two-stage DCF, and reports fair value
-per share alongside a full year-by-year projection and a WACC × terminal-growth
-sensitivity table.
+**[Try it →](https://dcf-calculator-issac.streamlit.app)**
 
-It also runs in reverse: given the current market price, it solves for the
-revenue growth rate that would justify it, then compares that against what the
-company has actually delivered historically.
+Type in a ticker. It pulls the company's real financials, projects their cash
+flow out five years, discounts it back to today, and tells you what a share
+looks like it's worth.
 
-Live: https://dcf-calculator-issac.streamlit.app
+Then it does the harder thing: it takes the price the market is actually
+charging and works backwards to the growth rate that would justify it. Apple
+needs 36% revenue growth a year to make sense at today's price. It has
+delivered 1.8%. That gap is the whole point — not the fair value number, the
+gap.
 
-## Run locally
+## Running it
 
 ```bash
 pip install -r requirements.txt
 streamlit run app.py
 ```
 
-## Run tests
-
-Tests need pytest, which is not a runtime dependency:
+Tests need one extra package:
 
 ```bash
 pip install -r requirements-dev.txt
 pytest
 ```
 
-The suite never touches the network. `dcf/data.py` takes any object satisfying
-the `_TickerLike` protocol, so tests inject a fake in place of `yfinance.Ticker`.
+They never touch the network. Real Yahoo responses are recorded in
+`tests/e2e/fixtures/` and replayed, so the suite runs the same way in a tunnel
+as it does on your couch.
 
-## Model
+## How it works
 
-Two-stage DCF over a 5-year explicit projection plus a Gordon Growth terminal
-value:
+Five years of projected free cash flow, plus a terminal value for everything
+after that:
 
 ```
-FCFF_t  = NOPAT_t + D&A_t - Capex_t - dWC_t
-NOPAT_t = Revenue_t * operating_margin * (1 - tax_rate)
-EV      = sum_t FCFF_t / (1 + WACC)^t  +  TV / (1 + WACC)^N
-TV      = FCFF_{N+1} / (WACC - g_terminal)
-Equity  = EV - net_debt
-Price   = Equity / shares_outstanding
+FCFF  = NOPAT + D&A - Capex - change in working capital
+EV    = each year's FCFF discounted back, + terminal value discounted back
+TV    = next year's FCFF / (WACC - terminal growth)
+Price = (EV - net debt) / shares outstanding
 ```
 
-The valuation engine in `dcf/engine.py` is pure Python with no I/O, validated
-against a hand-computed textbook problem in `tests/test_engine.py`.
+The discount rate comes from CAPM, using the company's own beta and capital
+structure rather than a round number someone picked.
 
-## Limitations
+All the math lives in `dcf/engine.py` — pure Python, no network, no Streamlit.
+It's checked against a textbook problem worked by hand, so the tests can tell
+you the answer is *wrong*, not just that it changed.
 
-Running the model across seven tickers puts every low-beta name within 30% of
-the market price and every high-beta name 55–95% below it. That ordering is a
-property of CAPM, not of the businesses. [LIMITATIONS.md](LIMITATIONS.md) has
-the measurements: where the output comes from, how much of it is the discount
-rate, and which companies this model cannot value at all.
+## What it can't do
+
+Sort the tickers by beta and you've sorted them by how wrong the model is.
+Steady companies land near their market price; volatile ones come out 55–95%
+below. That's CAPM showing through, not a fact about the businesses.
+
+[LIMITATIONS.md](LIMITATIONS.md) has the measurements, including the companies
+this model can't value at all. Worth reading before you trust a number it
+gives you.
