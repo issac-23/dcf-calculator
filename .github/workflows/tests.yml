@@ -33,11 +33,12 @@ jobs:
         run: pytest -v
 
       # The E2E suite regenerates tests/e2e/__snapshots__/valuation_report.md
-      # and fails if it differs from the committed copy, so reaching this step
-      # means the two match. Uploading it puts the actual valuations one click
-      # away from the check, rather than only in the diff.
+      # and fails if it differs from the committed copy, so this step only runs
+      # when the two match. That is why it is not `if: always()` -- on a failed
+      # run the file on disk is the stale committed one, and uploading it would
+      # present old valuations as the run's output. A failed run shows its
+      # diff in the pytest log instead.
       - name: Upload valuation report
-        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: valuation-report-py${{ matrix.python-version }}
