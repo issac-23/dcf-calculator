@@ -7,14 +7,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from dcf.assumptions import (
-    PROJECTION_YEARS,
-    SLIDER_BOUNDS,
-    WACC_MAX_PCT,
-    WACC_MIN_PCT,
-    seed_inputs,
-    seeded_wacc_pct,
-)
+from dcf.assumptions import ASSUMPTIONS, seed_inputs, seeded_wacc_pct
 from dcf.data import (
     CompanyData,
     DataFetchError,
@@ -22,7 +15,6 @@ from dcf.data import (
     fetch_risk_free_rate,
 )
 from dcf.valuation import run_valuation
-from dcf.wacc import DEFAULT_EQUITY_RISK_PREMIUM
 
 st.set_page_config(
     page_title="DCF Calculator",
@@ -98,18 +90,6 @@ def _cached_risk_free() -> tuple[float, bool]:
     return fetch_risk_free_rate()
 
 
-# Slider labels by SLIDER_BOUNDS field, shared by the widgets and the notice
-# that names which seeded defaults had to be clamped.
-_SLIDER_LABELS = {
-    "revenue_growth": "Revenue growth (annual)",
-    "operating_margin": "Operating margin",
-    "tax_rate": "Tax rate",
-    "capex_pct": "Capex / revenue",
-    "da_pct": "D&A / revenue",
-    "wc_pct": "Working capital / revenue",
-}
-
-
 def _format_money(x: float) -> str:
     if x is None:
         return "—"
@@ -183,29 +163,36 @@ with st.sidebar:
     # Defaults and bounds both come from dcf/assumptions.py, so this page and
     # the E2E valuation report start from the same inputs by construction.
     risk_free, rf_is_live = _cached_risk_free()
-    seed = seed_inputs(company, risk_free, DEFAULT_EQUITY_RISK_PREMIUM)
+    seed = seed_inputs(company, risk_free, ASSUMPTIONS["erp"].fallback / 100)
     seeded = seed.inputs
 
-    def _pct_slider(field: str, default: float, **kwargs) -> float:
-        _, lo, hi = SLIDER_BOUNDS[field]
-        return st.slider(
-            _SLIDER_LABELS[field], lo, hi, default * 100, 0.5, format="%.1f%%", **kwargs
-        )
+    values: dict[str, float] = {}
 
-    revenue_growth = _pct_slider("revenue_growth", seeded.revenue_growth)
-    operating_margin = _pct_slider("operating_margin", seeded.operating_margin)
-    tax_rate = _pct_slider("tax_rate", seeded.tax_rate)
-    capex_pct = _pct_slider("capex_pct", seeded.capex_pct)
-    da_pct = _pct_slider("da_pct", seeded.da_pct)
-    wc_pct_input = _pct_slider(
-        "wc_pct",
-        seeded.wc_pct,
-        help="Working capital balance as a percent of revenue. Year-over-year changes drive ΔWC in the FCF calc.",
-    )
+    def _slider(key: str, default: float, seeded_from_data: bool = True) -> float:
+        spec = ASSUMPTIONS[key]
+        kwargs = {} if spec.format is None else {"format": spec.format}
+        help_text = spec.help if seeded_from_data else spec.help_unseeded
+        if help_text:
+            kwargs["help"] = help_text
+        values[key] = st.slider(
+            spec.label, spec.lo, spec.hi, default, spec.step, **kwargs
+        )
+        return values[key]
+
+    def _seeded_default(spec) -> float:
+        # A history-backed assumption opens on its clamped historical average;
+        # everything else opens on its fallback.
+        if spec.history:
+            return getattr(seeded, spec.key) * 100
+        return spec.fallback
+
+    for spec in ASSUMPTIONS.values():
+        if spec.group == "operating":
+            _slider(spec.key, _seeded_default(spec))
 
     if seed.clamped:
         names = ", ".join(
-            label for field, label in _SLIDER_LABELS.items() if field in seed.clamped
+            spec.label for key, spec in ASSUMPTIONS.items() if key in seed.clamped
         )
         st.info(
             f"{company.ticker}'s historical average for {names} falls outside the "
@@ -216,62 +203,35 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("##### Discount rate & terminal value")
 
-    erp_pct = st.slider(
-        "Equity risk premium", 3.0, 8.0, DEFAULT_EQUITY_RISK_PREMIUM * 100, 0.25,
-        format="%.2f%%",
-        help=(
-            "The only CAPM input that cannot be looked up — it is an assumption "
-            "about future returns, not a measurement. Damodaran's implied "
-            "premium for mature markets has sat in the 4–6% band for years."
-        ),
-    )
-    erp_seed = seed_inputs(company, risk_free, erp_pct / 100)
+    for spec in ASSUMPTIONS.values():
+        if spec.group != "discount":
+            continue
+        if spec.key == "wacc":
+            # The derived figure seeds the slider rather than replacing it.
+            # WACC is the most consequential input in the model, so the user
+            # keeps the final say -- but the starting point is computed
+            # instead of a round 9%. It depends on the premium chosen above.
+            erp_seed = seed_inputs(company, risk_free, values["erp"] / 100)
+            _slider(
+                "wacc", seeded_wacc_pct(erp_seed.wacc), seeded_from_data=bool(erp_seed.wacc)
+            )
+            if erp_seed.wacc:
+                st.caption(f"Derived: **{erp_seed.wacc.wacc * 100:.2f}%**")
+            else:
+                st.caption(f"Not derived — {erp_seed.wacc_reason}")
+        else:
+            _slider(spec.key, spec.fallback)
 
-    # The derived figure seeds the slider rather than replacing it. WACC is
-    # the most consequential input in the model, so the user keeps the final
-    # say — but the starting point is now computed instead of a round 9%.
-    derived_pct = seeded_wacc_pct(erp_seed.wacc)
-    wacc = st.slider(
-        "WACC (discount rate)", WACC_MIN_PCT, WACC_MAX_PCT, derived_pct, 0.25,
-        format="%.2f%%",
-        help=(
-            "Seeded from CAPM using this company's beta and capital structure. "
-            "Drag to override."
-            if erp_seed.wacc
-            else "Could not be derived for this ticker, so this is a generic default."
-        ),
-    )
-    if erp_seed.wacc:
-        st.caption(f"Derived: **{erp_seed.wacc.wacc * 100:.2f}%**")
-    else:
-        st.caption(f"Not derived — {erp_seed.wacc_reason}")
-    tg_default, tg_lo, tg_hi = SLIDER_BOUNDS["terminal_growth"]
-    terminal_growth = st.slider(
-        "Terminal growth rate", tg_lo, tg_hi, tg_default, 0.25, format="%.2f%%"
-    )
-    years_default, years_lo, years_hi = PROJECTION_YEARS
-    projection_years = st.slider("Projection years", years_lo, years_hi, years_default)
+    revenue_growth = values["revenue_growth"]
+    erp_pct = values["erp"]
+    wacc = values["wacc"]
+    terminal_growth = values["terminal_growth"]
 
 
 # ----- the valuation ---------------------------------------------------------
 
 try:
-    valuation = run_valuation(
-        company,
-        risk_free,
-        {
-            "revenue_growth": revenue_growth,
-            "operating_margin": operating_margin,
-            "tax_rate": tax_rate,
-            "capex_pct": capex_pct,
-            "da_pct": da_pct,
-            "wc_pct": wc_pct_input,
-            "erp": erp_pct,
-            "wacc": wacc,
-            "terminal_growth": terminal_growth,
-            "projection_years": projection_years,
-        },
-    )
+    valuation = run_valuation(company, risk_free, values)
 except ValueError as e:
     st.error(f"Invalid assumptions: {e}")
     st.stop()

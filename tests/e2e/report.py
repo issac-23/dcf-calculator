@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from dcf.assumptions import PROJECTION_YEARS, SLIDER_BOUNDS
+from dcf.assumptions import ASSUMPTIONS
 from dcf.data import CompanyData, DataFetchError, build_company_data
 from dcf.valuation import Valuation, run_valuation
 from dcf.wacc import DEFAULT_EQUITY_RISK_PREMIUM
@@ -82,8 +82,8 @@ def render(rows: List[TickerResult]) -> str:
     out.append(
         f"Risk-free rate pinned at {E2E_RISK_FREE * 100:.2f}%, equity risk premium "
         f"at {DEFAULT_EQUITY_RISK_PREMIUM * 100:.2f}%, terminal growth "
-        f"{SLIDER_BOUNDS['terminal_growth'][0]:.2f}%, "
-        f"{PROJECTION_YEARS[0]}-year projection."
+        f"{ASSUMPTIONS['terminal_growth'].fallback:.2f}%, "
+        f"{ASSUMPTIONS['projection_years'].fallback}-year projection."
     )
     out.append("")
     out.append(

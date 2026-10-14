@@ -23,10 +23,10 @@ from typing import List, Literal, Mapping, Optional
 
 import numpy as np
 
-from dcf.assumptions import seed_inputs
+from dcf.assumptions import ASSUMPTIONS, seed_inputs
 from dcf.data import CompanyData
 from dcf.engine import DCFInputs, DCFResult, implied_revenue_growth, run_dcf, sensitivity_grid
-from dcf.wacc import DEFAULT_EQUITY_RISK_PREMIUM, WACCBreakdown
+from dcf.wacc import WACCBreakdown
 
 # Fair value more than this far from the market price is called under- or
 # overvalued; inside it the two are "fairly valued".
@@ -100,14 +100,14 @@ def run_valuation(
     """Value `company`. Raises ValueError when the assumptions are invalid."""
     overrides = overrides or {}
 
-    erp_pct = overrides.get("erp", DEFAULT_EQUITY_RISK_PREMIUM * 100)
+    erp_pct = overrides.get("erp", ASSUMPTIONS["erp"].fallback)
     seed = seed_inputs(company, risk_free, erp_pct / 100)
 
     changes = {}
     for field, value in overrides.items():
         if field == "erp":
             continue
-        changes[field] = int(value) if field == "projection_years" else value / 100
+        changes[field] = int(value) if ASSUMPTIONS[field].unit == "years" else value / 100
     inputs = replace(seed.inputs, **changes)
 
     result = run_dcf(inputs)
