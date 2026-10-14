@@ -168,6 +168,20 @@ def test_capm_fields_are_none_when_absent_rather_than_zero():
     assert d.shares_outstanding > 0
 
 
+def test_total_debt_is_none_when_not_reported_and_net_debt_says_so():
+    """Unreported debt is an absence, not a measurement of zero.
+
+    Ways this goes wrong: total_debt comes back 0.0 and the WACC step treats
+    the company as debt-free without anyone being told; or net_debt quietly
+    drops the debt and the equity value is overstated with no sign of it.
+    """
+    tk = _full_fixture()
+    tk.info = {k: v for k, v in tk.info.items() if k != "totalDebt"}
+    d = build_company_data("TEST", tk)
+    assert d.total_debt is None
+    assert any("total debt" in w.lower() for w in d.warnings)
+
+
 def test_interest_expense_falls_back_to_the_non_operating_line():
     tk = _full_fixture()
     tk.financials = tk.financials.rename(

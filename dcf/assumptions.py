@@ -84,7 +84,11 @@ def derive_wacc(
     """
     missing = [
         name
-        for name, value in (("beta", company.beta), ("market cap", company.market_cap))
+        for name, value in (
+            ("beta", company.beta),
+            ("market cap", company.market_cap),
+            ("total debt", company.total_debt),
+        )
         if value is None
     ]
     if missing:
@@ -98,7 +102,7 @@ def derive_wacc(
                     beta=company.beta,
                     equity_risk_premium=erp,
                     market_cap=company.market_cap,
-                    total_debt=company.total_debt or 0.0,
+                    total_debt=company.total_debt,
                     interest_expense=company.interest_expense,
                     tax_rate=company.historical_tax_rate
                     if company.historical_tax_rate is not None
