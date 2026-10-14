@@ -100,6 +100,19 @@ def test_unrealistic_terminal_growth_raises():
         run_dcf(_base_inputs(terminal_growth=0.10, wacc=0.20))
 
 
+@pytest.mark.parametrize("terminal_growth", [0.04, 0.05])
+def test_terminal_growth_at_or_above_wacc_raises(terminal_growth):
+    """Both numbers sit inside their own bounds; it is the pair that is wrong.
+
+    The band check on terminal_growth (-5% to 6%) catches absurd values, so a
+    test with g = 10% never reaches the WACC comparison. Here g is plausible
+    and WACC is low enough that g meets or passes it, which is the case where
+    the Gordon denominator is zero (g == wacc) or negative (g > wacc).
+    """
+    with pytest.raises(ValueError, match="strictly less than wacc"):
+        run_dcf(_base_inputs(wacc=0.04, terminal_growth=terminal_growth))
+
+
 def test_zero_wacc_raises():
     with pytest.raises(ValueError, match="wacc"):
         run_dcf(_base_inputs(wacc=0.0))

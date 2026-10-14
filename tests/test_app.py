@@ -136,3 +136,16 @@ def test_unreported_debt_is_not_silently_an_all_equity_wacc():
     assert "Derived:" not in shown
     wacc = next(s for s in at.slider if s.label.startswith("WACC"))
     assert wacc.value == 9.0, "should fall back to the generic default, not cost of equity"
+
+
+def test_terminal_growth_at_or_above_wacc_shows_an_error_not_a_traceback():
+    """The sliders allow it: WACC bottoms out at 4% and terminal growth tops
+    out at 5%. The engine refuses the pair and the page has to say so."""
+    at = _run(_fake_company())
+    next(s for s in at.slider if s.label.startswith("WACC")).set_value(4.0)
+    next(s for s in at.slider if s.label == "Terminal growth rate").set_value(4.5)
+    at.run()
+
+    assert not at.exception, "; ".join(str(e.value) for e in at.exception)
+    assert any("strictly less than wacc" in e.value for e in at.error)
+    assert "Valuation" not in " ".join(m.value for m in at.markdown)
