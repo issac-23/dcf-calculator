@@ -93,11 +93,26 @@ def assert_page_shows_the_reports_fair_value(at: AppTest, symbol: str) -> None:
     inputs from slider values. If the two ever seed differently the snapshot
     stops describing what a person sees, and nothing else would notice.
     """
-    expected = f"${report.evaluate(symbol).model_price:,.2f}"
+    expected = f"${report.evaluate(symbol).valuation.result.fair_value_per_share:,.2f}"
     shown = next(m.value for m in at.metric if m.label == "Fair value / share")
     assert shown == expected, (
         f"the page opened on {shown} for {symbol} but the valuation report "
         f"says {expected}"
+    )
+
+
+_VERDICT_WORDING = {
+    "undervalued": "undervalued",
+    "overvalued": "overvalued",
+    "fair": "Fairly valued",
+}
+
+
+def assert_page_shows_the_verdict(at: AppTest, verdict: str) -> None:
+    """The fair-value tile's delta says what the valuation run concluded."""
+    tile = next(m for m in at.metric if m.label == "Fair value / share")
+    assert _VERDICT_WORDING[verdict] in tile.delta, (
+        f"expected a {verdict} verdict on the page, got {tile.delta!r}"
     )
 
 
@@ -121,15 +136,20 @@ def test_a_stable_company_values_near_its_market_price_and_the_page_renders(monk
     model is broken, not merely limited.
     """
     row = report.evaluate("JNJ")
+    v = row.valuation
 
     assert row.error is None
-    assert row.wacc_derived, "CAPM should derive cleanly from a full recording"
-    assert 4 < row.wacc_pct < 9, f"a defensive name should discount cheaply, got {row.wacc_pct:.2f}%"
-    assert abs(row.gap_pct) < 40, f"expected the model near market, got {row.gap_pct:+.1f}%"
-    assert row.implied_growth is not None
+    assert v.wacc is not None, "CAPM should derive cleanly from a full recording"
+    wacc_pct = v.inputs.wacc * 100
+    assert 4 < wacc_pct < 9, f"a defensive name should discount cheaply, got {wacc_pct:.2f}%"
+    assert abs(v.upside) < 0.40, f"expected the model near market, got {v.upside:+.1%}"
+    assert v.verdict == "undervalued", "J&J lands about 14% above its price"
+    assert v.implied.rate is not None
+    assert v.implied.reading == "in_line", "J&J's implied growth is close to its history"
 
     at = load_via_the_button(monkeypatch, "JNJ")
     assert_page_shows_the_reports_fair_value(at, "JNJ")
+    assert_page_shows_the_verdict(at, "undervalued")
     text = page_text(at)
     for section in ("Valuation", "Free cash flow projection", "Reverse DCF",
                     "Sensitivity analysis", "Cost of capital"):
@@ -161,21 +181,26 @@ def test_a_volatile_company_is_discounted_far_below_market_and_says_why(monkeypa
     wrong is fine, the number being unexplained is not.
     """
     row = report.evaluate("AAPL")
+    v = row.valuation
 
     assert row.error is None
-    assert row.wacc_derived
-    assert row.wacc_pct > 9, "a beta near 1 should not discount like a utility"
-    assert row.gap_pct < -40, f"expected a large discount to market, got {row.gap_pct:+.1f}%"
+    assert v.wacc is not None
+    assert v.inputs.wacc * 100 > 9, "a beta near 1 should not discount like a utility"
+    assert v.upside < -0.40, f"expected a large discount to market, got {v.upside:+.1%}"
+    assert v.verdict == "overvalued"
 
     # The whole point: the market's implied growth is far above delivered growth.
-    assert row.implied_growth > (row.company.historical_revenue_growth + 0.10), (
+    assert v.implied.gap_vs_history > 0.10, (
         "the reverse DCF should show the market assuming much more growth than "
         "this company has delivered"
     )
+    assert v.implied.reading == "optimistic"
 
     at = load_via_the_button(monkeypatch, "AAPL")
     assert_page_shows_the_reports_fair_value(at, "AAPL")
+    assert_page_shows_the_verdict(at, "overvalued")
     assert "Reverse DCF" in page_text(at)
+    assert "pp above" in page_text(at), "the page should say the market is the optimist"
 
 
 def test_a_price_the_model_cannot_reach_reports_nothing_rather_than_guessing(monkeypatch):
@@ -188,15 +213,18 @@ def test_a_price_the_model_cannot_reach_reports_nothing_rather_than_guessing(mon
     None here, and the page must still render.
     """
     row = report.evaluate("TSLA")
+    v = row.valuation
 
     assert row.error is None
-    assert row.implied_growth is None, (
-        f"expected no solution, got {row.implied_growth!r} — if the solver has "
+    assert v.implied is not None and v.implied.rate is None, (
+        f"expected no solution, got {v.implied!r} — if the solver has "
         "started finding a root here, check it is a real one and re-record"
     )
+    assert v.implied.reading is None, "no growth rate means nothing to compare with history"
 
     at = load_via_the_button(monkeypatch, "TSLA")
     assert_page_shows_the_reports_fair_value(at, "TSLA")
+    assert_page_shows_the_verdict(at, "overvalued")
     assert "Valuation" in page_text(at)
     assert len(at.dataframe) == 1
 
@@ -214,6 +242,8 @@ def test_a_bank_is_flagged_as_the_wrong_shape_for_this_model(monkeypatch):
 
     at = load_via_the_button(monkeypatch, "JPM")
     assert_page_shows_the_reports_fair_value(at, "JPM")
+    assert report.evaluate("JPM").valuation.verdict == "fair", "JPM lands within 10% of its price"
+    assert_page_shows_the_verdict(at, "fair")
     warnings = " ".join(w.value for w in at.warning).lower()
     assert "financial" in warnings or "dcf" in warnings
     assert "Valuation" in page_text(at), "it should still render a valuation"
