@@ -7,10 +7,12 @@ per share — no layer is stubbed in between.
 
 There are deliberately few of them. A DCF has exactly one interesting
 question ("what does this company come out worth, and do I believe it?"), and
-the paths that question can take are: it works, it works but the answer is
-absurd, the reverse solve has no answer, the company is the wrong shape for
-the model, or the data isn't there. That is five journeys, and they are these
-five. The sixth test pins the numbers.
+the paths that question can take are: it works (once with a tidy ticker, once
+typed the way people type it), it works but the answer is absurd, the reverse
+solve has no answer, the company is the wrong shape for the model, the data
+isn't there, or the Treasury quote behind every WACC is dead. That is seven
+journeys, and they are these seven. The eighth and last test pins the
+numbers.
 
 The fixtures are real recordings, so these tests know real things — that
 Apple's beta is near 1.1 and J&J's near 0.2, that Karuna stopped reporting
@@ -108,7 +110,7 @@ def page_text(at: AppTest) -> str:
     )
 
 
-# ----- the five journeys ----------------------------------------------------
+# ----- the seven journeys ----------------------------------------------------
 
 
 def test_a_stable_company_values_near_its_market_price_and_the_page_renders(monkeypatch):
@@ -312,7 +314,7 @@ def test_a_dead_treasury_quote_costs_the_rate_and_not_the_valuation(
 def test_the_valuation_report_matches_the_committed_snapshot():
     """Regenerate the report and diff it against the committed copy.
 
-    This is the repeatable artifact. The five journeys above assert on
+    This is the repeatable artifact. The seven journeys above assert on
     behaviour and tolerate drift; this one pins every number, so a change in
     any layer shows up as a readable diff in `__snapshots__`.
 
