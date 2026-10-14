@@ -7,13 +7,11 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from dcf import DCFInputs, run_dcf
 from dcf.assumptions import (
     PROJECTION_YEARS,
     SLIDER_BOUNDS,
     WACC_MAX_PCT,
     WACC_MIN_PCT,
-    derive_wacc,
     seed_inputs,
     seeded_wacc_pct,
 )
@@ -23,7 +21,7 @@ from dcf.data import (
     fetch_company_data,
     fetch_risk_free_rate,
 )
-from dcf.engine import implied_revenue_growth, sensitivity_grid
+from dcf.valuation import run_valuation
 from dcf.wacc import DEFAULT_EQUITY_RISK_PREMIUM
 
 st.set_page_config(
@@ -227,26 +225,26 @@ with st.sidebar:
             "premium for mature markets has sat in the 4–6% band for years."
         ),
     )
-    wacc_breakdown, wacc_reason = derive_wacc(company, risk_free, erp_pct / 100)
+    erp_seed = seed_inputs(company, risk_free, erp_pct / 100)
 
     # The derived figure seeds the slider rather than replacing it. WACC is
     # the most consequential input in the model, so the user keeps the final
     # say — but the starting point is now computed instead of a round 9%.
-    derived_pct = seeded_wacc_pct(wacc_breakdown)
+    derived_pct = seeded_wacc_pct(erp_seed.wacc)
     wacc = st.slider(
         "WACC (discount rate)", WACC_MIN_PCT, WACC_MAX_PCT, derived_pct, 0.25,
         format="%.2f%%",
         help=(
             "Seeded from CAPM using this company's beta and capital structure. "
             "Drag to override."
-            if wacc_breakdown
+            if erp_seed.wacc
             else "Could not be derived for this ticker, so this is a generic default."
         ),
     )
-    if wacc_breakdown:
-        st.caption(f"Derived: **{wacc_breakdown.wacc * 100:.2f}%**")
+    if erp_seed.wacc:
+        st.caption(f"Derived: **{erp_seed.wacc.wacc * 100:.2f}%**")
     else:
-        st.caption(f"Not derived — {wacc_reason}")
+        st.caption(f"Not derived — {erp_seed.wacc_reason}")
     tg_default, tg_lo, tg_hi = SLIDER_BOUNDS["terminal_growth"]
     terminal_growth = st.slider(
         "Terminal growth rate", tg_lo, tg_hi, tg_default, 0.25, format="%.2f%%"
@@ -255,28 +253,32 @@ with st.sidebar:
     projection_years = st.slider("Projection years", years_lo, years_hi, years_default)
 
 
-# ----- build inputs --------------------------------------------------------
-
-inputs = DCFInputs(
-    revenue_base=company.revenue_base,
-    shares_outstanding=company.shares_outstanding,
-    net_debt=company.net_debt,
-    revenue_growth=revenue_growth / 100,
-    operating_margin=operating_margin / 100,
-    tax_rate=tax_rate / 100,
-    capex_pct=capex_pct / 100,
-    da_pct=da_pct / 100,
-    wc_pct=wc_pct_input / 100,
-    terminal_growth=terminal_growth / 100,
-    wacc=wacc / 100,
-    projection_years=projection_years,
-)
+# ----- the valuation ---------------------------------------------------------
 
 try:
-    result = run_dcf(inputs)
+    valuation = run_valuation(
+        company,
+        risk_free,
+        {
+            "revenue_growth": revenue_growth,
+            "operating_margin": operating_margin,
+            "tax_rate": tax_rate,
+            "capex_pct": capex_pct,
+            "da_pct": da_pct,
+            "wc_pct": wc_pct_input,
+            "erp": erp_pct,
+            "wacc": wacc,
+            "terminal_growth": terminal_growth,
+            "projection_years": projection_years,
+        },
+    )
 except ValueError as e:
     st.error(f"Invalid assumptions: {e}")
     st.stop()
+
+result = valuation.result
+wacc_breakdown = valuation.wacc
+wacc_reason = valuation.wacc_reason
 
 
 # ----- company header ------------------------------------------------------
@@ -300,17 +302,15 @@ st.markdown("### Valuation")
 
 fair_value = result.fair_value_per_share
 current = company.current_price or 0.0
+upside = valuation.upside
 
-if current > 0:
-    upside = (fair_value - current) / current
-    if upside > 0.10:
-        verdict = f"▲ {upside * 100:.1f}% undervalued"
-    elif upside < -0.10:
-        verdict = f"▼ {abs(upside) * 100:.1f}% overvalued"
-    else:
-        verdict = f"≈ Fairly valued ({upside * 100:+.1f}%)"
+if valuation.verdict == "undervalued":
+    verdict = f"▲ {upside * 100:.1f}% undervalued"
+elif valuation.verdict == "overvalued":
+    verdict = f"▼ {abs(upside) * 100:.1f}% overvalued"
+elif valuation.verdict == "fair":
+    verdict = f"≈ Fairly valued ({upside * 100:+.1f}%)"
 else:
-    upside = None
     verdict = "Current price unavailable"
 
 v1, v2, v3 = st.columns(3)
@@ -443,12 +443,17 @@ s1.metric("Sum of PV(FCF)", _format_money(result.sum_pv_fcf))
 s2.metric("Terminal value", _format_money(result.terminal_value))
 s3.metric("PV of terminal value", _format_money(result.pv_terminal_value))
 
+tv_share_text = (
+    ""
+    if valuation.tv_share is None
+    else f"Terminal value contributes {valuation.tv_share * 100:.0f}% of enterprise "
+    "value — the higher this share, the more your valuation depends on "
+    "assumptions about the distant future."
+)
 st.caption(
     f"Terminal value computed via Gordon Growth: "
     f"FCF × (1 + g) / (WACC − g), with g = {terminal_growth:.2f}% and WACC = {wacc:.2f}%. "
-    f"Terminal value contributes "
-    f"{result.pv_terminal_value / result.enterprise_value * 100:.0f}% of enterprise value — "
-    f"the higher this share, the more your valuation depends on assumptions about the distant future."
+    + tv_share_text
 )
 
 
@@ -489,7 +494,7 @@ st.plotly_chart(fcf_fig, width="stretch")
 
 # ----- reverse DCF ---------------------------------------------------------
 
-if company.current_price and company.current_price > 0:
+if valuation.implied is not None:
     st.markdown("### Reverse DCF")
     st.caption(
         "Instead of asking *what is this stock worth?*, ask *what growth rate "
@@ -497,7 +502,7 @@ if company.current_price and company.current_price > 0:
         "assumptions above are held fixed."
     )
 
-    implied = implied_revenue_growth(inputs, company.current_price)
+    implied = valuation.implied.rate
 
     r1, r2, r3 = st.columns(3)
     r1.metric("Current price", f"${company.current_price:,.2f}")
@@ -524,25 +529,27 @@ if company.current_price and company.current_price > 0:
         else:
             r3.metric("Your assumption", f"{revenue_growth:.1f}%")
 
-        if hist is not None:
-            gap = implied_pct - hist * 100
-            if gap > 5:
-                interp = (
-                    f"The market is pricing in growth **{gap:.1f} pp above** the "
-                    "4-year historical average — an optimistic take that assumes "
-                    "the business accelerates."
-                )
-            elif gap < -5:
-                interp = (
-                    f"The market is pricing in growth **{abs(gap):.1f} pp below** "
-                    "the 4-year historical average — a pessimistic take that "
-                    "assumes the business decelerates."
-                )
-            else:
-                interp = (
-                    "The market's implied growth is roughly in line with the "
-                    "4-year historical average."
-                )
+        gap = valuation.implied.gap_vs_history
+        if valuation.implied.reading == "optimistic":
+            interp = (
+                f"The market is pricing in growth **{gap * 100:.1f} pp above** the "
+                "4-year historical average — an optimistic take that assumes "
+                "the business accelerates."
+            )
+        elif valuation.implied.reading == "pessimistic":
+            interp = (
+                f"The market is pricing in growth **{abs(gap) * 100:.1f} pp below** "
+                "the 4-year historical average — a pessimistic take that "
+                "assumes the business decelerates."
+            )
+        elif valuation.implied.reading == "in_line":
+            interp = (
+                "The market's implied growth is roughly in line with the "
+                "4-year historical average."
+            )
+        else:
+            interp = None
+        if interp:
             st.caption(interp)
 
 
@@ -554,11 +561,10 @@ st.caption(
     "If small moves change the answer drastically, your valuation is fragile."
 )
 
-wacc_grid = np.round(np.arange(max(0.04, wacc / 100 - 0.025), wacc / 100 + 0.026, 0.005), 4)
-g_grid = np.round(np.arange(0.0, 0.041, 0.005), 4)
-grid = sensitivity_grid(inputs, list(wacc_grid), list(g_grid))
+wacc_grid = valuation.sensitivity.wacc
+g_grid = valuation.sensitivity.terminal_growth
 
-heatmap_z = np.array(grid)
+heatmap_z = np.array(valuation.sensitivity.fair_value)
 text = np.where(
     np.isnan(heatmap_z),
     "—",
