@@ -55,15 +55,6 @@ def company(symbol):
     return build_company_data(symbol, replay.load(symbol))
 
 
-def render_app(symbol) -> AppTest:
-    """Drive the real Streamlit script with this company already loaded."""
-    at = AppTest.from_file(APP, default_timeout=120)
-    at.session_state["company"] = company(symbol)
-    at.run()
-    assert not at.exception, "; ".join(str(e.value) for e in at.exception)
-    return at
-
-
 def load_via_the_button(monkeypatch, symbol) -> AppTest:
     """Type a ticker and click Load financials, the way a person does.
 
@@ -82,7 +73,23 @@ def load_via_the_button(monkeypatch, symbol) -> AppTest:
     at.run()
     at.text_input[0].set_value(symbol)
     at.button[0].click().run()
+    assert not at.exception, "; ".join(str(e.value) for e in at.exception)
     return at
+
+
+def assert_page_shows_the_reports_fair_value(at: AppTest, symbol: str) -> None:
+    """The page's opening valuation is the one the snapshot pins.
+
+    The snapshot is built by seed_inputs -> run_dcf; the page builds its
+    inputs from slider values. If the two ever seed differently the snapshot
+    stops describing what a person sees, and nothing else would notice.
+    """
+    expected = f"${report.evaluate(symbol).model_price:,.2f}"
+    shown = next(m.value for m in at.metric if m.label == "Fair value / share")
+    assert shown == expected, (
+        f"the page opened on {shown} for {symbol} but the valuation report "
+        f"says {expected}"
+    )
 
 
 def body(at: AppTest) -> str:
@@ -97,7 +104,7 @@ def body(at: AppTest) -> str:
 # ----- the five journeys ----------------------------------------------------
 
 
-def test_a_stable_company_values_near_its_market_price_and_the_page_renders():
+def test_a_stable_company_values_near_its_market_price_and_the_page_renders(monkeypatch):
     """J&J: the case the model is actually good at.
 
     Low beta, steady growth, positive cash flow. This journey is the one that
@@ -112,7 +119,8 @@ def test_a_stable_company_values_near_its_market_price_and_the_page_renders():
     assert abs(row.gap_pct) < 40, f"expected the model near market, got {row.gap_pct:+.1f}%"
     assert row.implied_growth is not None
 
-    at = render_app("JNJ")
+    at = load_via_the_button(monkeypatch, "JNJ")
+    assert_page_shows_the_reports_fair_value(at, "JNJ")
     text = body(at)
     for section in ("Valuation", "Free cash flow projection", "Reverse DCF",
                     "Sensitivity analysis", "Cost of capital"):
@@ -121,22 +129,21 @@ def test_a_stable_company_values_near_its_market_price_and_the_page_renders():
 
 
 def test_typing_a_ticker_and_clicking_load_gets_you_a_valuation(monkeypatch):
-    """The same journey as above, driven through the actual widgets.
+    """The same journey as above, with the ticker typed the way people type it.
 
-    Everything else in this suite reaches the valuation by writing straight
-    into session_state, which skips the load handler entirely. This one
-    clicks the button.
+    Every journey loads through the button; this one keeps the handler's own
+    behaviour in view -- whitespace and case are normalised, nothing errors,
+    and the loaded company lands in session state.
     """
-    at = load_via_the_button(monkeypatch, "JNJ")
+    at = load_via_the_button(monkeypatch, " jnj ")
 
-    assert not at.exception, "; ".join(str(e.value) for e in at.exception)
     assert not at.error, "; ".join(e.value for e in at.error)
     assert at.session_state["company"].ticker == "JNJ"
     assert "Valuation" in body(at)
     assert len(at.dataframe) == 1
 
 
-def test_a_volatile_company_is_discounted_far_below_market_and_says_why():
+def test_a_volatile_company_is_discounted_far_below_market_and_says_why(monkeypatch):
     """Apple: the case the model is bad at, failing in the documented way.
 
     A high beta feeds a high discount rate, the model lands far under market,
@@ -157,11 +164,12 @@ def test_a_volatile_company_is_discounted_far_below_market_and_says_why():
         "this company has delivered"
     )
 
-    at = render_app("AAPL")
+    at = load_via_the_button(monkeypatch, "AAPL")
+    assert_page_shows_the_reports_fair_value(at, "AAPL")
     assert "Reverse DCF" in body(at)
 
 
-def test_a_price_the_model_cannot_reach_reports_nothing_rather_than_guessing():
+def test_a_price_the_model_cannot_reach_reports_nothing_rather_than_guessing(monkeypatch):
     """Tesla: the bisection has no root in its search range.
 
     This is the regression test for the reverse-DCF bug. The solver used to
@@ -178,12 +186,13 @@ def test_a_price_the_model_cannot_reach_reports_nothing_rather_than_guessing():
         "started finding a root here, check it is a real one and re-record"
     )
 
-    at = render_app("TSLA")
+    at = load_via_the_button(monkeypatch, "TSLA")
+    assert_page_shows_the_reports_fair_value(at, "TSLA")
     assert "Valuation" in body(at)
     assert len(at.dataframe) == 1
 
 
-def test_a_bank_is_flagged_as_the_wrong_shape_for_this_model():
+def test_a_bank_is_flagged_as_the_wrong_shape_for_this_model(monkeypatch):
     """JPMorgan: FCFF is not a meaningful number for a bank.
 
     The app does not refuse to value it — refusing would be worse, because
@@ -194,7 +203,8 @@ def test_a_bank_is_flagged_as_the_wrong_shape_for_this_model():
     assert c.is_dcf_inappropriate
     assert c.warnings, "an inappropriate sector must produce a visible warning"
 
-    at = render_app("JPM")
+    at = load_via_the_button(monkeypatch, "JPM")
+    assert_page_shows_the_reports_fair_value(at, "JPM")
     warnings = " ".join(w.value for w in at.warning).lower()
     assert "financial" in warnings or "dcf" in warnings
     assert "Valuation" in body(at), "it should still render a valuation"
