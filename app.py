@@ -15,6 +15,7 @@ from dcf.market import (
     load_source,
     source_spec,
 )
+from dcf.caveats import Caveat, CaveatKind
 from dcf.valuation import run_valuation
 
 st.set_page_config(
@@ -194,15 +195,8 @@ with st.sidebar:
         if spec.group == "operating":
             _slider(spec.key, _seeded_default(spec))
 
-    if seed.clamped:
-        names = ", ".join(
-            spec.label for key, spec in ASSUMPTIONS.items() if key in seed.clamped
-        )
-        st.info(
-            f"{company.ticker}'s historical average for {names} falls outside the "
-            "slider's range, so the default was clamped to the nearest bound. "
-            "The model is not using the figure the history actually shows."
-        )
+    # Filled in once the valuation has found its caveats, below.
+    clamped_notice = st.container()
 
     st.markdown("---")
     st.markdown("##### Discount rate & terminal value")
@@ -242,7 +236,69 @@ except ValueError as e:
 
 result = valuation.result
 wacc_breakdown = valuation.wacc
-wacc_reason = valuation.wacc_reason
+
+
+# ----- caveats -----------------------------------------------------------------
+# The valuation run finds them; this is the one place the page words them, and
+# each is shown where the reader is looking at the thing it qualifies.
+
+
+def _say(caveat: Caveat) -> str:
+    kind = caveat.kind
+    if kind is CaveatKind.WRONG_SECTOR:
+        return (
+            f"DCF is unreliable for {caveat.subject.lower()} companies. "
+            "Banks should be valued using equity DCF or P/B; "
+            "REITs using FFO or NAV."
+        )
+    if kind is CaveatKind.DEBT_UNREPORTED:
+        return (
+            "Yahoo did not report total debt for this ticker. Net debt below "
+            "counts it as zero, which overstates equity value if the company "
+            "borrows."
+        )
+    if kind is CaveatKind.NEGATIVE_MARGIN:
+        return (
+            "Historical operating margin is negative. "
+            "The DCF will return a negative fair value unless you adjust margin assumptions."
+        )
+    if kind is CaveatKind.WACC_NOT_DERIVED:
+        return (
+            f"WACC could not be derived for {company.ticker} — {caveat.subject} "
+            f"The model is using the **{wacc:.2f}%** set in the sidebar."
+        )
+    if kind is CaveatKind.DEBT_COST_UNKNOWN:
+        return (
+            f"{company.ticker} carries {_format_money(company.total_debt)} of debt, but "
+            "no interest expense was reported, so its cost could not be established. "
+            "The figure above is the cost of equity only, which understates WACC for "
+            "a leveraged company."
+        )
+    if kind is CaveatKind.NO_IMPLIED_GROWTH:
+        return (
+            "No revenue growth rate between −50% and +100% reproduces the current "
+            "price under the other assumptions. Try adjusting margin, WACC, or "
+            "terminal growth."
+        )
+    if kind is CaveatKind.DEFAULT_CLAMPED:
+        raise ValueError("clamped defaults are worded together, see _say_clamped")
+    raise ValueError(f"no wording for {kind}")
+
+
+def _say_clamped(caveats) -> str:
+    keys = {c.subject for c in caveats}
+    names = ", ".join(spec.label for key, spec in ASSUMPTIONS.items() if key in keys)
+    return (
+        f"{company.ticker}'s historical average for {names} falls outside the "
+        "slider's range, so the default was clamped to the nearest bound. "
+        "The model is not using the figure the history actually shows."
+    )
+
+
+clamped = valuation.caveats_of(CaveatKind.DEFAULT_CLAMPED)
+if clamped:
+    with clamped_notice:
+        st.info(_say_clamped(clamped))
 
 
 # ----- company header ------------------------------------------------------
@@ -256,8 +312,9 @@ with header_right:
     if company.current_price:
         st.metric("Current price", f"${company.current_price:,.2f}")
 
-for w in company.warnings:
-    st.warning(w)
+for kind in (CaveatKind.DEBT_UNREPORTED, CaveatKind.WRONG_SECTOR, CaveatKind.NEGATIVE_MARGIN):
+    for caveat in valuation.caveats_of(kind):
+        st.warning(_say(caveat))
 
 
 # ----- valuation summary ---------------------------------------------------
@@ -296,10 +353,7 @@ e3.metric("Net debt", _format_money(company.net_debt))
 st.markdown("### Cost of capital")
 
 if wacc_breakdown is None:
-    st.info(
-        f"WACC could not be derived for {company.ticker} — {wacc_reason} "
-        f"The model is using the **{wacc:.2f}%** set in the sidebar."
-    )
+    st.info(_say(valuation.caveats_of(CaveatKind.WACC_NOT_DERIVED)[0]))
 else:
     b = wacc_breakdown
     st.caption(
@@ -346,13 +400,8 @@ else:
         )
     )
 
-    if b.debt_cost_unknown:
-        st.warning(
-            f"{company.ticker} carries {_format_money(company.total_debt)} of debt, but "
-            "no interest expense was reported, so its cost could not be established. "
-            "The figure above is the cost of equity only, which understates WACC for "
-            "a leveraged company."
-        )
+    for caveat in valuation.caveats_of(CaveatKind.DEBT_COST_UNKNOWN):
+        st.warning(_say(caveat))
 
     with st.expander("Why this is an estimate"):
         st.markdown(
@@ -473,11 +522,7 @@ if valuation.implied is not None:
     if implied is None:
         r2.metric("Implied revenue growth", "—")
         r3.metric("Your assumption", f"{revenue_growth:.1f}%")
-        st.caption(
-            "No revenue growth rate between −50% and +100% reproduces the current "
-            "price under the other assumptions. Try adjusting margin, WACC, or "
-            "terminal growth."
-        )
+        st.caption(_say(valuation.caveats_of(CaveatKind.NO_IMPLIED_GROWTH)[0]))
     else:
         implied_pct = implied * 100
         delta = implied_pct - revenue_growth

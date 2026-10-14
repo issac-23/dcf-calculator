@@ -24,6 +24,7 @@ from typing import List, Literal, Mapping, Optional
 import numpy as np
 
 from dcf.assumptions import ASSUMPTIONS, seed_inputs
+from dcf.caveats import Caveat, CaveatKind, find_caveats
 from dcf.data import CompanyData
 from dcf.engine import DCFInputs, DCFResult, implied_revenue_growth, run_dcf, sensitivity_grid
 from dcf.wacc import WACCBreakdown
@@ -90,6 +91,11 @@ class Valuation:
     # None when there is no market price to solve against.
     implied: Optional[ImpliedGrowth]
     sensitivity: Sensitivity
+    # Everything that makes this answer weaker than it looks, in report order.
+    caveats: tuple
+
+    def caveats_of(self, kind: CaveatKind) -> List[Caveat]:
+        return [c for c in self.caveats if c.kind is kind]
 
 
 def run_valuation(
@@ -146,6 +152,13 @@ def run_valuation(
         tv_share=tv_share,
         implied=implied,
         sensitivity=_sensitivity(inputs),
+        caveats=find_caveats(
+            company,
+            seed.wacc,
+            seed.wacc_reason,
+            seed.clamped,
+            None if implied is None else implied.rate is not None,
+        ),
     )
 
 

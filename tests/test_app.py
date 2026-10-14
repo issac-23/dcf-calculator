@@ -55,7 +55,6 @@ def _fake_company(**overrides) -> CompanyData:
         total_debt=5e8,
         interest_expense=2.5e7,
         is_dcf_inappropriate=False,
-        warnings=[],
     )
     defaults.update(overrides)
     return CompanyData(**defaults)
@@ -90,6 +89,13 @@ def test_missing_beta_explains_itself_instead_of_erroring():
     # The valuation still has to render.
     assert len(at.dataframe) == 1
     assert "Valuation" in " ".join(m.value for m in at.markdown)
+
+
+def test_negative_historical_margin_warns_before_it_shows_a_negative_value():
+    """The model compounds a negative margin into a negative fair value; the
+    page has to say why instead of presenting it as a verdict."""
+    at = _run(_fake_company(historical_operating_margin=-0.08))
+    assert any("margin is negative" in w.value for w in at.warning)
 
 
 def test_debt_without_interest_expense_warns_about_understating_wacc():

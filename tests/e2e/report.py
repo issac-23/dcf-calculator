@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import List, Optional
 
 from dcf.assumptions import ASSUMPTIONS
+from dcf.caveats import Caveat, CaveatKind
 from dcf.data import CompanyData, DataFetchError, build_company_data
 from dcf.market import fetch_risk_free_rate
 from dcf.valuation import Valuation, run_valuation
@@ -68,6 +69,47 @@ def _pct(x: Optional[float], digits: int = 1) -> str:
 
 def _money(x: Optional[float]) -> str:
     return "—" if x is None else f"${x:,.2f}"
+
+
+def _say(caveat: Caveat) -> str:
+    """The report's wording for each caveat: one line, after the ticker."""
+    kind = caveat.kind
+    if kind is CaveatKind.WRONG_SECTOR:
+        return (
+            f" is in {caveat.subject}, where a free-cash-flow DCF "
+            "is the wrong tool. The app flags it and values it anyway."
+        )
+    if kind is CaveatKind.DEFAULT_CLAMPED:
+        return (
+            f": the `{caveat.subject}` default was clamped to fit its "
+            "slider range, so the model is not valuing the company its own "
+            "history describes."
+        )
+    if kind is CaveatKind.NO_IMPLIED_GROWTH:
+        return (
+            ": the reverse DCF found no revenue growth rate "
+            "in its search range that reproduces the market price, and "
+            "returned nothing rather than guessing."
+        )
+    if kind is CaveatKind.DEBT_UNREPORTED:
+        return (
+            ": Yahoo did not report total debt for this ticker. Net debt "
+            "counts it as zero, which overstates equity value if the company "
+            "borrows."
+        )
+    if kind is CaveatKind.NEGATIVE_MARGIN:
+        return (
+            ": historical operating margin is negative, so the DCF returns a "
+            "negative fair value unless the margin assumption is adjusted."
+        )
+    if kind is CaveatKind.WACC_NOT_DERIVED:
+        return f": WACC could not be derived, so the generic default is used. {caveat.subject}"
+    if kind is CaveatKind.DEBT_COST_UNKNOWN:
+        return (
+            ": debt is reported but its cost is not, so the WACC is the cost "
+            "of equity alone and understates the cost of capital."
+        )
+    raise ValueError(f"no wording for {kind}")
 
 
 def render(rows: List[TickerResult]) -> str:
@@ -129,27 +171,8 @@ def render(rows: List[TickerResult]) -> str:
 
     notes: List[str] = []
     for r in sorted(priced, key=lambda r: r.symbol):
-        company = r.company
-        v = r.valuation
-        if company.is_dcf_inappropriate:
-            notes.append(
-                f"- **{r.symbol}** is in {company.sector}, where a free-cash-flow DCF "
-                "is the wrong tool. The app flags it and values it anyway."
-            )
-        for field in sorted(v.clamped):
-            notes.append(
-                f"- **{r.symbol}**: the `{field}` default was clamped to fit its "
-                "slider range, so the model is not valuing the company its own "
-                "history describes."
-            )
-        if v.implied is not None and v.implied.rate is None:
-            notes.append(
-                f"- **{r.symbol}**: the reverse DCF found no revenue growth rate "
-                "in its search range that reproduces the market price, and "
-                "returned nothing rather than guessing."
-            )
-        for w in company.warnings:
-            notes.append(f"- **{r.symbol}**: {w}")
+        for caveat in r.valuation.caveats:
+            notes.append(f"- **{r.symbol}**{_say(caveat)}")
 
     if notes:
         out.append("## Notes")

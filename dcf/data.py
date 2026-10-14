@@ -9,8 +9,8 @@ Treasury price history into a rate. Getting those objects from the network
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import List, Optional, Protocol
+from dataclasses import dataclass
+from typing import Optional, Protocol
 
 import pandas as pd
 
@@ -54,7 +54,6 @@ class CompanyData:
     historical_wc_pct: Optional[float]
 
     is_dcf_inappropriate: bool
-    warnings: List[str] = field(default_factory=list)
 
 
 class Fundamentals(Protocol):
@@ -102,7 +101,7 @@ def build_company_data(symbol: str, tk: Fundamentals) -> CompanyData:
 
     # Debt Yahoo did not report stays None on the CompanyData -- it is unknown,
     # not zero -- but net_debt has to be a number, so it counts as zero there
-    # and a warning below says so.
+    # and the valuation run reports a DEBT_UNREPORTED caveat.
     total_debt = _coerce_float(info.get("totalDebt"))
     total_cash = _coerce_float(info.get("totalCash"), default=0.0) or 0.0
     net_debt = (total_debt or 0.0) - total_cash
@@ -119,25 +118,7 @@ def build_company_data(symbol: str, tk: Fundamentals) -> CompanyData:
 
     hist = _historical_averages(financials, cashflow)
 
-    warnings: List[str] = []
-    if total_debt is None:
-        warnings.append(
-            "Yahoo did not report total debt for this ticker. Net debt below "
-            "counts it as zero, which overstates equity value if the company "
-            "borrows."
-        )
     is_inappropriate = sector in _DCF_INAPPROPRIATE_SECTORS
-    if is_inappropriate:
-        warnings.append(
-            f"DCF is unreliable for {sector.lower()} companies. "
-            "Banks should be valued using equity DCF or P/B; "
-            "REITs using FFO or NAV."
-        )
-    if hist["operating_margin"] is not None and hist["operating_margin"] < 0:
-        warnings.append(
-            "Historical operating margin is negative. "
-            "The DCF will return a negative fair value unless you adjust margin assumptions."
-        )
 
     return CompanyData(
         ticker=symbol,
@@ -159,7 +140,6 @@ def build_company_data(symbol: str, tk: Fundamentals) -> CompanyData:
         historical_da_pct=hist["da_pct"],
         historical_wc_pct=hist["wc_pct"],
         is_dcf_inappropriate=is_inappropriate,
-        warnings=warnings,
     )
 
 

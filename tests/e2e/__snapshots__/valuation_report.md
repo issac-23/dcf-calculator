@@ -19,7 +19,6 @@ To change this file, re-record the fixtures (`python tests/e2e/record.py`) and r
 
 - **JPM** is in Financial Services, where a free-cash-flow DCF is the wrong tool. The app flags it and values it anyway.
 - **JPM**: the `wc_pct` default was clamped to fit its slider range, so the model is not valuing the company its own history describes.
-- **JPM**: DCF is unreliable for financial services companies. Banks should be valued using equity DCF or P/B; REITs using FFO or NAV.
 - **TSLA**: the reverse DCF found no revenue growth rate in its search range that reproduces the market price, and returned nothing rather than guessing.
 
 ## Not valued

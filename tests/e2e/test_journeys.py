@@ -29,6 +29,7 @@ from pathlib import Path
 import pytest
 from streamlit.testing.v1 import AppTest
 
+from dcf.caveats import CaveatKind
 from dcf.data import FALLBACK_RISK_FREE_RATE, DataFetchError, build_company_data
 
 from tests.e2e import replay, report
@@ -214,7 +215,10 @@ def test_a_bank_is_flagged_as_the_wrong_shape_for_this_model():
     bank = build_company("JPM")
 
     assert bank.is_dcf_inappropriate
-    assert bank.warnings, "an inappropriate sector must produce a visible warning"
+    caveats = [c.kind for c in report.evaluate("JPM").valuation.caveats]
+    assert caveats.count(CaveatKind.WRONG_SECTOR) == 1, (
+        "an inappropriate sector must be reported once, not once per surface"
+    )
 
     at = load_via_the_button("JPM")
     assert_page_shows_the_reports_fair_value(at, "JPM")
