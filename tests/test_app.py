@@ -25,7 +25,9 @@ import streamlit as st
 from streamlit.testing.v1 import AppTest
 
 import dcf.data
-from dcf.data import CompanyData
+from dcf.data import CompanyData, build_company_data
+
+from tests.e2e import replay
 
 # AppTest resolves a relative path against the file that calls from_file(),
 # not the working directory, so "app.py" would look for tests/app.py. Build an
@@ -113,3 +115,37 @@ def test_debt_without_interest_expense_warns_about_understating_wacc():
     at = _run(_fake_company(interest_expense=None))
     warnings = " ".join(w.value for w in at.warning)
     assert "understates" in warnings.lower() or "interest expense" in warnings.lower()
+
+
+def test_unreported_debt_is_not_silently_an_all_equity_wacc():
+    """Yahoo omitting totalDebt must not turn into a confident cost of equity.
+
+    Driven from the recorded J&J payload with that one field removed, so it
+    goes through the real data layer. Ways it goes wrong: the WACC is derived
+    as if debt were zero and shown as "Derived"; or the page raises; or the
+    user is told nothing.
+    """
+    tk = replay.load("JNJ")
+    tk.info = {k: v for k, v in tk.info.items() if k != "totalDebt"}
+    at = _run(build_company_data("JNJ", tk))
+
+    shown = " ".join(
+        [i.value for i in at.info] + [c.value for c in at.caption] + [w.value for w in at.warning]
+    )
+    assert "total debt" in shown.lower()
+    assert "Derived:" not in shown
+    wacc = next(s for s in at.slider if s.label.startswith("WACC"))
+    assert wacc.value == 9.0, "should fall back to the generic default, not cost of equity"
+
+
+def test_terminal_growth_at_or_above_wacc_shows_an_error_not_a_traceback():
+    """The sliders allow it: WACC bottoms out at 4% and terminal growth tops
+    out at 5%. The engine refuses the pair and the page has to say so."""
+    at = _run(_fake_company())
+    next(s for s in at.slider if s.label.startswith("WACC")).set_value(4.0)
+    next(s for s in at.slider if s.label == "Terminal growth rate").set_value(4.5)
+    at.run()
+
+    assert not at.exception, "; ".join(str(e.value) for e in at.exception)
+    assert any("strictly less than wacc" in e.value for e in at.error)
+    assert "Valuation" not in " ".join(m.value for m in at.markdown)

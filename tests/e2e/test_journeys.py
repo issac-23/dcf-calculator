@@ -7,10 +7,12 @@ per share — no layer is stubbed in between.
 
 There are deliberately few of them. A DCF has exactly one interesting
 question ("what does this company come out worth, and do I believe it?"), and
-the paths that question can take are: it works, it works but the answer is
-absurd, the reverse solve has no answer, the company is the wrong shape for
-the model, or the data isn't there. That is five journeys, and they are these
-five. The sixth test pins the numbers.
+the paths that question can take are: it works (once with a tidy ticker, once
+typed the way people type it), it works but the answer is absurd, the reverse
+solve has no answer, the company is the wrong shape for the model, the data
+isn't there, or the Treasury quote behind every WACC is dead. That is seven
+journeys, and they are these seven. The eighth and last test pins the
+numbers.
 
 The fixtures are real recordings, so these tests know real things — that
 Apple's beta is near 1.1 and J&J's near 0.2, that Karuna stopped reporting
@@ -24,20 +26,23 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+import pandas as pd
 import pytest
 import streamlit as st
 from streamlit.testing.v1 import AppTest
 
 import dcf.data
-from dcf.assumptions import seed_inputs
-from dcf.data import DataFetchError, build_company_data
-from dcf.engine import run_dcf
-from dcf.wacc import DEFAULT_EQUITY_RISK_PREMIUM
+from dcf.data import FALLBACK_RISK_FREE_RATE, DataFetchError, build_company_data
 
 from tests.e2e import replay, report
 
 APP = str(Path(__file__).resolve().parents[2] / "app.py")
 SNAPSHOT = Path(__file__).resolve().parent / "__snapshots__" / "valuation_report.md"
+
+
+# Captured at import, before the autouse fixture below replaces it, so the
+# risk-free journey can put the real function back.
+_REAL_FETCH_RISK_FREE_RATE = dcf.data.fetch_risk_free_rate
 
 
 @pytest.fixture(autouse=True)
@@ -51,17 +56,12 @@ def offline(monkeypatch):
     st.cache_data.clear()
 
 
-def company(symbol):
+def build_company(symbol):
     return build_company_data(symbol, replay.load(symbol))
 
 
-def render_app(symbol) -> AppTest:
-    """Drive the real Streamlit script with this company already loaded."""
-    at = AppTest.from_file(APP, default_timeout=120)
-    at.session_state["company"] = company(symbol)
-    at.run()
-    assert not at.exception, "; ".join(str(e.value) for e in at.exception)
-    return at
+def exceptions(at: AppTest) -> str:
+    return "; ".join(str(e.value) for e in at.exception)
 
 
 def load_via_the_button(monkeypatch, symbol) -> AppTest:
@@ -69,11 +69,11 @@ def load_via_the_button(monkeypatch, symbol) -> AppTest:
 
     Only the network call itself is replaced — the button, the spinner, the
     session-state write and both error branches are the real ones. Injecting
-    session_state directly (as render_app does) skips all of that, which is
-    how the load handler went untested for the life of the app.
+    session_state directly would skip all of that, which is how the load
+    handler went untested for the life of the app.
     """
     def fake_fetch(ticker: str):
-        return build_company_data(ticker.strip().upper(), replay.load(ticker))
+        return build_company(ticker.strip().upper())
 
     monkeypatch.setattr(dcf.data, "fetch_company_data", fake_fetch)
     st.cache_data.clear()
@@ -82,22 +82,38 @@ def load_via_the_button(monkeypatch, symbol) -> AppTest:
     at.run()
     at.text_input[0].set_value(symbol)
     at.button[0].click().run()
+    assert not at.exception, exceptions(at)
     return at
 
 
-def body(at: AppTest) -> str:
+def assert_page_shows_the_reports_fair_value(at: AppTest, symbol: str) -> None:
+    """The page's opening valuation is the one the snapshot pins.
+
+    The snapshot is built by seed_inputs -> run_dcf; the page builds its
+    inputs from slider values. If the two ever seed differently the snapshot
+    stops describing what a person sees, and nothing else would notice.
+    """
+    expected = f"${report.evaluate(symbol).model_price:,.2f}"
+    shown = next(m.value for m in at.metric if m.label == "Fair value / share")
+    assert shown == expected, (
+        f"the page opened on {shown} for {symbol} but the valuation report "
+        f"says {expected}"
+    )
+
+
+def page_text(at: AppTest) -> str:
     return " ".join(
         [m.value for m in at.markdown]
-        + [c.value for c in at.caption]
+        + [cap.value for cap in at.caption]
         + [w.value for w in at.warning]
         + [i.value for i in at.info]
     )
 
 
-# ----- the five journeys ----------------------------------------------------
+# ----- the seven journeys ----------------------------------------------------
 
 
-def test_a_stable_company_values_near_its_market_price_and_the_page_renders():
+def test_a_stable_company_values_near_its_market_price_and_the_page_renders(monkeypatch):
     """J&J: the case the model is actually good at.
 
     Low beta, steady growth, positive cash flow. This journey is the one that
@@ -112,8 +128,9 @@ def test_a_stable_company_values_near_its_market_price_and_the_page_renders():
     assert abs(row.gap_pct) < 40, f"expected the model near market, got {row.gap_pct:+.1f}%"
     assert row.implied_growth is not None
 
-    at = render_app("JNJ")
-    text = body(at)
+    at = load_via_the_button(monkeypatch, "JNJ")
+    assert_page_shows_the_reports_fair_value(at, "JNJ")
+    text = page_text(at)
     for section in ("Valuation", "Free cash flow projection", "Reverse DCF",
                     "Sensitivity analysis", "Cost of capital"):
         assert section in text, f"{section!r} missing from the rendered page"
@@ -121,22 +138,21 @@ def test_a_stable_company_values_near_its_market_price_and_the_page_renders():
 
 
 def test_typing_a_ticker_and_clicking_load_gets_you_a_valuation(monkeypatch):
-    """The same journey as above, driven through the actual widgets.
+    """The same journey as above, with the ticker typed the way people type it.
 
-    Everything else in this suite reaches the valuation by writing straight
-    into session_state, which skips the load handler entirely. This one
-    clicks the button.
+    Every journey loads through the button; this one keeps the handler's own
+    behaviour in view -- whitespace and case are normalised, nothing errors,
+    and the loaded company lands in session state.
     """
-    at = load_via_the_button(monkeypatch, "JNJ")
+    at = load_via_the_button(monkeypatch, " jnj ")
 
-    assert not at.exception, "; ".join(str(e.value) for e in at.exception)
     assert not at.error, "; ".join(e.value for e in at.error)
     assert at.session_state["company"].ticker == "JNJ"
-    assert "Valuation" in body(at)
+    assert "Valuation" in page_text(at)
     assert len(at.dataframe) == 1
 
 
-def test_a_volatile_company_is_discounted_far_below_market_and_says_why():
+def test_a_volatile_company_is_discounted_far_below_market_and_says_why(monkeypatch):
     """Apple: the case the model is bad at, failing in the documented way.
 
     A high beta feeds a high discount rate, the model lands far under market,
@@ -157,11 +173,12 @@ def test_a_volatile_company_is_discounted_far_below_market_and_says_why():
         "this company has delivered"
     )
 
-    at = render_app("AAPL")
-    assert "Reverse DCF" in body(at)
+    at = load_via_the_button(monkeypatch, "AAPL")
+    assert_page_shows_the_reports_fair_value(at, "AAPL")
+    assert "Reverse DCF" in page_text(at)
 
 
-def test_a_price_the_model_cannot_reach_reports_nothing_rather_than_guessing():
+def test_a_price_the_model_cannot_reach_reports_nothing_rather_than_guessing(monkeypatch):
     """Tesla: the bisection has no root in its search range.
 
     This is the regression test for the reverse-DCF bug. The solver used to
@@ -178,26 +195,36 @@ def test_a_price_the_model_cannot_reach_reports_nothing_rather_than_guessing():
         "started finding a root here, check it is a real one and re-record"
     )
 
-    at = render_app("TSLA")
-    assert "Valuation" in body(at)
+    at = load_via_the_button(monkeypatch, "TSLA")
+    assert_page_shows_the_reports_fair_value(at, "TSLA")
+    assert "Valuation" in page_text(at)
     assert len(at.dataframe) == 1
 
 
-def test_a_bank_is_flagged_as_the_wrong_shape_for_this_model():
+def test_a_bank_is_flagged_as_the_wrong_shape_for_this_model(monkeypatch):
     """JPMorgan: FCFF is not a meaningful number for a bank.
 
     The app does not refuse to value it — refusing would be worse, because
     the user would not learn why. It values it and says the tool is wrong.
     """
-    c = company("JPM")
+    bank = build_company("JPM")
 
-    assert c.is_dcf_inappropriate
-    assert c.warnings, "an inappropriate sector must produce a visible warning"
+    assert bank.is_dcf_inappropriate
+    assert bank.warnings, "an inappropriate sector must produce a visible warning"
 
-    at = render_app("JPM")
+    at = load_via_the_button(monkeypatch, "JPM")
+    assert_page_shows_the_reports_fair_value(at, "JPM")
     warnings = " ".join(w.value for w in at.warning).lower()
     assert "financial" in warnings or "dcf" in warnings
-    assert "Valuation" in body(at), "it should still render a valuation"
+    assert "Valuation" in page_text(at), "it should still render a valuation"
+
+    # JPM's recorded working-capital history sits far outside the slider's
+    # range, so the default is clamped. The sidebar has to say which input.
+    notices = " ".join(i.value for i in at.sidebar.info)
+    assert "Working capital / revenue" in notices, (
+        "a clamped default must be named in the sidebar, not applied silently"
+    )
+    assert "Operating margin" not in notices, "only clamped inputs should be named"
 
 
 def test_a_delisted_company_fails_with_a_message_a_human_can_act_on(monkeypatch):
@@ -209,7 +236,7 @@ def test_a_delisted_company_fails_with_a_message_a_human_can_act_on(monkeypatch)
     missing thing instead of surfacing a KeyError.
     """
     with pytest.raises(DataFetchError) as excinfo:
-        company("KRTX")
+        build_company("KRTX")
 
     message = str(excinfo.value)
     assert "KRTX" in message
@@ -219,11 +246,66 @@ def test_a_delisted_company_fails_with_a_message_a_human_can_act_on(monkeypatch)
     # error, with the app still standing and still asking for a ticker.
     at = load_via_the_button(monkeypatch, "KRTX")
 
-    assert not at.exception, "the failure must be handled, not raised"
     errors = " ".join(e.value for e in at.error)
     assert "KRTX" in errors and "revenue" in errors.lower()
     assert at.session_state["company"] is None
     assert any("Enter a ticker" in i.value for i in at.info)
+
+
+def _treasury_quote(close):
+    """A stand-in for yf.Ticker("^TNX"): the one thing replaced is the network."""
+
+    class FakeTreasury:
+        def __init__(self, symbol):
+            pass
+
+        def history(self, period):
+            if isinstance(close, Exception):
+                raise close
+            return pd.DataFrame({"Close": close})
+
+    return FakeTreasury
+
+
+@pytest.mark.parametrize(
+    "quote, is_live",
+    [
+        pytest.param([4.10, 4.96], True, id="normal-quote"),
+        pytest.param(ConnectionError("Yahoo unreachable"), False, id="dead-network"),
+        pytest.param([float("nan")] * 2, False, id="all-nan"),
+        pytest.param([], False, id="empty"),
+        pytest.param([0.0], False, id="zero"),
+        pytest.param([-1.5], False, id="negative"),
+        pytest.param([15.0], False, id="at-the-ceiling"),
+        pytest.param([518.0], False, id="units-changed"),
+    ],
+)
+def test_a_dead_treasury_quote_costs_the_rate_and_not_the_valuation(
+    monkeypatch, quote, is_live
+):
+    """The 10-year Treasury feeds every WACC, and it fails on its own.
+
+    Runs the real fetch_risk_free_rate with only the Yahoo call replaced. The
+    ways it goes wrong: a percent read as a decimal (^TNX quotes 4.96 for
+    4.96%, and a missing /100 prices every company at nothing); a NaN or
+    empty series that raises instead of falling back; a garbage quote passed
+    through as a real rate; an exception that takes the valuation with it; or
+    a stale fallback presented as today's yield. So the page must still
+    value the company, and its caption must say which rate it used and
+    whether that rate is live.
+    """
+    monkeypatch.setattr(dcf.data, "fetch_risk_free_rate", _REAL_FETCH_RISK_FREE_RATE)
+    monkeypatch.setattr("yfinance.Ticker", _treasury_quote(quote))
+
+    at = load_via_the_button(monkeypatch, "JNJ")
+
+    assert "Valuation" in page_text(at), "a bad Treasury quote must not cost the valuation"
+    caption = next(c.value for c in at.caption if "10-year Treasury" in c.value)
+    if is_live:
+        assert "10-year Treasury at 4.96%" in caption
+        assert "fallback" not in caption
+    else:
+        assert f"a {FALLBACK_RISK_FREE_RATE * 100:.2f}% fallback is in use" in caption
 
 
 # ----- the artifact ---------------------------------------------------------
@@ -232,7 +314,7 @@ def test_a_delisted_company_fails_with_a_message_a_human_can_act_on(monkeypatch)
 def test_the_valuation_report_matches_the_committed_snapshot():
     """Regenerate the report and diff it against the committed copy.
 
-    This is the repeatable artifact. The five journeys above assert on
+    This is the repeatable artifact. The seven journeys above assert on
     behaviour and tolerate drift; this one pins every number, so a change in
     any layer shows up as a readable diff in `__snapshots__`.
 

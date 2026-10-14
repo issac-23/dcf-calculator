@@ -113,9 +113,12 @@ def build_company_data(symbol: str, tk: _TickerLike) -> CompanyData:
             f"Could not find shares outstanding for '{symbol}'."
         )
 
-    total_debt = _coerce_float(info.get("totalDebt"), default=0.0) or 0.0
+    # Debt Yahoo did not report stays None on the CompanyData -- it is unknown,
+    # not zero -- but net_debt has to be a number, so it counts as zero there
+    # and a warning below says so.
+    total_debt = _coerce_float(info.get("totalDebt"))
     total_cash = _coerce_float(info.get("totalCash"), default=0.0) or 0.0
-    net_debt = total_debt - total_cash
+    net_debt = (total_debt or 0.0) - total_cash
 
     # "Interest Expense" is the headline line; the non-operating variant is
     # the fallback because some filings only break it out that way.
@@ -130,6 +133,12 @@ def build_company_data(symbol: str, tk: _TickerLike) -> CompanyData:
     hist = _historical_averages(financials, cashflow)
 
     warnings: List[str] = []
+    if total_debt is None:
+        warnings.append(
+            "Yahoo did not report total debt for this ticker. Net debt below "
+            "counts it as zero, which overstates equity value if the company "
+            "borrows."
+        )
     is_inappropriate = sector in _DCF_INAPPROPRIATE_SECTORS
     if is_inappropriate:
         warnings.append(

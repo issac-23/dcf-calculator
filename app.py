@@ -9,10 +9,12 @@ import streamlit as st
 
 from dcf import DCFInputs, run_dcf
 from dcf.assumptions import (
+    PROJECTION_YEARS,
+    SLIDER_BOUNDS,
     WACC_MAX_PCT,
     WACC_MIN_PCT,
-    default_pct,
     derive_wacc,
+    seed_inputs,
     seeded_wacc_pct,
 )
 from dcf.data import (
@@ -98,6 +100,18 @@ def _cached_risk_free() -> tuple[float, bool]:
     return fetch_risk_free_rate()
 
 
+# Slider labels by SLIDER_BOUNDS field, shared by the widgets and the notice
+# that names which seeded defaults had to be clamped.
+_SLIDER_LABELS = {
+    "revenue_growth": "Revenue growth (annual)",
+    "operating_margin": "Operating margin",
+    "tax_rate": "Tax rate",
+    "capex_pct": "Capex / revenue",
+    "da_pct": "D&A / revenue",
+    "wc_pct": "Working capital / revenue",
+}
+
+
 def _format_money(x: float) -> str:
     if x is None:
         return "—"
@@ -168,42 +182,42 @@ with st.sidebar:
         "Drag any slider to test your own thesis."
     )
 
-    revenue_growth = st.slider(
-        "Revenue growth (annual)", -10.0, 30.0,
-        default_pct(company.historical_revenue_growth, "revenue_growth"),
-        0.5, format="%.1f%%",
-    )
-    operating_margin = st.slider(
-        "Operating margin", -20.0, 60.0,
-        default_pct(company.historical_operating_margin, "operating_margin"),
-        0.5, format="%.1f%%",
-    )
-    tax_rate = st.slider(
-        "Tax rate", 0.0, 40.0,
-        default_pct(company.historical_tax_rate, "tax_rate"),
-        0.5, format="%.1f%%",
-    )
-    capex_pct = st.slider(
-        "Capex / revenue", 0.0, 30.0,
-        default_pct(company.historical_capex_pct, "capex_pct"),
-        0.5, format="%.1f%%",
-    )
-    da_pct = st.slider(
-        "D&A / revenue", 0.0, 30.0,
-        default_pct(company.historical_da_pct, "da_pct"),
-        0.5, format="%.1f%%",
-    )
-    wc_pct_input = st.slider(
-        "Working capital / revenue", -10.0, 30.0,
-        default_pct(company.historical_wc_pct, "wc_pct"),
-        0.5, format="%.1f%%",
+    # Defaults and bounds both come from dcf/assumptions.py, so this page and
+    # the E2E valuation report start from the same inputs by construction.
+    risk_free, rf_is_live = _cached_risk_free()
+    seed = seed_inputs(company, risk_free, DEFAULT_EQUITY_RISK_PREMIUM)
+    seeded = seed.inputs
+
+    def _pct_slider(field: str, default: float, **kwargs) -> float:
+        _, lo, hi = SLIDER_BOUNDS[field]
+        return st.slider(
+            _SLIDER_LABELS[field], lo, hi, default * 100, 0.5, format="%.1f%%", **kwargs
+        )
+
+    revenue_growth = _pct_slider("revenue_growth", seeded.revenue_growth)
+    operating_margin = _pct_slider("operating_margin", seeded.operating_margin)
+    tax_rate = _pct_slider("tax_rate", seeded.tax_rate)
+    capex_pct = _pct_slider("capex_pct", seeded.capex_pct)
+    da_pct = _pct_slider("da_pct", seeded.da_pct)
+    wc_pct_input = _pct_slider(
+        "wc_pct",
+        seeded.wc_pct,
         help="Working capital balance as a percent of revenue. Year-over-year changes drive ΔWC in the FCF calc.",
     )
+
+    if seed.clamped:
+        names = ", ".join(
+            label for field, label in _SLIDER_LABELS.items() if field in seed.clamped
+        )
+        st.info(
+            f"{company.ticker}'s historical average for {names} falls outside the "
+            "slider's range, so the default was clamped to the nearest bound. "
+            "The model is not using the figure the history actually shows."
+        )
 
     st.markdown("---")
     st.markdown("##### Discount rate & terminal value")
 
-    risk_free, rf_is_live = _cached_risk_free()
     erp_pct = st.slider(
         "Equity risk premium", 3.0, 8.0, DEFAULT_EQUITY_RISK_PREMIUM * 100, 0.25,
         format="%.2f%%",
@@ -233,8 +247,12 @@ with st.sidebar:
         st.caption(f"Derived: **{wacc_breakdown.wacc * 100:.2f}%**")
     else:
         st.caption(f"Not derived — {wacc_reason}")
-    terminal_growth = st.slider("Terminal growth rate", 0.0, 5.0, 2.5, 0.25, format="%.2f%%")
-    projection_years = st.slider("Projection years", 3, 10, 5)
+    tg_default, tg_lo, tg_hi = SLIDER_BOUNDS["terminal_growth"]
+    terminal_growth = st.slider(
+        "Terminal growth rate", tg_lo, tg_hi, tg_default, 0.25, format="%.2f%%"
+    )
+    years_default, years_lo, years_hi = PROJECTION_YEARS
+    projection_years = st.slider("Projection years", years_lo, years_hi, years_default)
 
 
 # ----- build inputs --------------------------------------------------------

@@ -20,10 +20,12 @@ from dcf.wacc import WACCBreakdown, WACCInputs, WACCUnavailable, compute_wacc
 # rate to work from.
 FALLBACK_TAX_RATE = 0.21
 
-# Each slider's (fallback, min, max) in percent points. The bounds are the
-# real widget bounds in app.py: a historical average outside them is clamped,
-# which is a documented limitation rather than an accident (see LIMITATIONS.md
-# section 5 -- NVDA's 100% historical growth clamps to 30%).
+# Each slider's (fallback, min, max) in percent points. app.py builds its
+# widgets from these, so they are the real widget bounds: a historical average
+# outside them is clamped, which is a documented limitation rather than an
+# accident (see LIMITATIONS.md section 5 -- NVDA's 100% historical growth
+# clamps to 30%). Terminal growth has no history to seed from, so its
+# fallback is simply the default.
 SLIDER_BOUNDS = {
     "revenue_growth": (5.0, -10.0, 30.0),
     "operating_margin": (15.0, -20.0, 60.0),
@@ -31,7 +33,11 @@ SLIDER_BOUNDS = {
     "capex_pct": (5.0, 0.0, 30.0),
     "da_pct": (5.0, 0.0, 30.0),
     "wc_pct": (2.0, -10.0, 30.0),
+    "terminal_growth": (2.5, 0.0, 5.0),
 }
+
+# (default, min, max) in whole years.
+PROJECTION_YEARS = (5, 3, 10)
 
 WACC_MIN_PCT, WACC_MAX_PCT = 4.0, 20.0
 WACC_FALLBACK_PCT = 9.0
@@ -84,7 +90,11 @@ def derive_wacc(
     """
     missing = [
         name
-        for name, value in (("beta", company.beta), ("market cap", company.market_cap))
+        for name, value in (
+            ("beta", company.beta),
+            ("market cap", company.market_cap),
+            ("total debt", company.total_debt),
+        )
         if value is None
     ]
     if missing:
@@ -98,7 +108,7 @@ def derive_wacc(
                     beta=company.beta,
                     equity_risk_premium=erp,
                     market_cap=company.market_cap,
-                    total_debt=company.total_debt or 0.0,
+                    total_debt=company.total_debt,
                     interest_expense=company.interest_expense,
                     tax_rate=company.historical_tax_rate
                     if company.historical_tax_rate is not None
@@ -118,7 +128,7 @@ def seeded_wacc_pct(breakdown: Optional[WACCBreakdown]) -> float:
     return float(clamp(breakdown.wacc * 100, WACC_MIN_PCT, WACC_MAX_PCT))
 
 
-class Seeded(NamedTuple):
+class SeededAssumptions(NamedTuple):
     inputs: DCFInputs
     wacc: Optional[WACCBreakdown]
     wacc_reason: Optional[str]
@@ -129,9 +139,7 @@ def seed_inputs(
     company: CompanyData,
     risk_free: float,
     erp: float,
-    terminal_growth: float = 0.025,
-    projection_years: int = 5,
-) -> Seeded:
+) -> SeededAssumptions:
     """Everything the app would show on first load, with no slider touched."""
     breakdown, reason = derive_wacc(company, risk_free, erp)
     inputs = DCFInputs(
@@ -144,8 +152,8 @@ def seed_inputs(
         capex_pct=default_pct(company.historical_capex_pct, "capex_pct") / 100,
         da_pct=default_pct(company.historical_da_pct, "da_pct") / 100,
         wc_pct=default_pct(company.historical_wc_pct, "wc_pct") / 100,
-        terminal_growth=terminal_growth,
+        terminal_growth=SLIDER_BOUNDS["terminal_growth"][0] / 100,
         wacc=seeded_wacc_pct(breakdown) / 100,
-        projection_years=projection_years,
+        projection_years=PROJECTION_YEARS[0],
     )
-    return Seeded(inputs, breakdown, reason, clamped_from_history(company))
+    return SeededAssumptions(inputs, breakdown, reason, clamped_from_history(company))

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from dcf.assumptions import seed_inputs
+from dcf.assumptions import PROJECTION_YEARS, SLIDER_BOUNDS, seed_inputs
 from dcf.data import CompanyData, DataFetchError, build_company_data
 from dcf.engine import implied_revenue_growth, run_dcf
 from dcf.wacc import DEFAULT_EQUITY_RISK_PREMIUM
@@ -26,11 +26,12 @@ from tests.e2e import replay
 E2E_RISK_FREE = 0.0518
 
 
-class Row:
+class TickerResult:
     """One ticker's trip through the model, or the error that stopped it."""
 
     def __init__(self, symbol: str):
         self.symbol = symbol
+        self.recorded_at: Optional[str] = None
         self.error: Optional[str] = None
         self.company: Optional[CompanyData] = None
         self.wacc_pct: Optional[float] = None
@@ -42,9 +43,10 @@ class Row:
         self.clamped: set = set()
 
 
-def evaluate(symbol: str) -> Row:
-    row = Row(symbol)
+def evaluate(symbol: str) -> TickerResult:
+    row = TickerResult(symbol)
     tk = replay.load(symbol)
+    row.recorded_at = tk.recorded_at
 
     try:
         company = build_company_data(symbol, tk)
@@ -74,8 +76,8 @@ def evaluate(symbol: str) -> Row:
     return row
 
 
-def evaluate_all(symbols: List[str] | None = None) -> List[Row]:
-    return [evaluate(s) for s in (symbols or replay.available())]
+def evaluate_all() -> List[TickerResult]:
+    return [evaluate(s) for s in replay.available()]
 
 
 def _pct(x: Optional[float], digits: int = 1) -> str:
@@ -86,7 +88,7 @@ def _money(x: Optional[float]) -> str:
     return "—" if x is None else f"${x:,.2f}"
 
 
-def render(rows: List[Row]) -> str:
+def render(rows: List[TickerResult]) -> str:
     out: List[str] = []
     out.append("# Valuation report")
     out.append("")
@@ -98,8 +100,9 @@ def render(rows: List[Row]) -> str:
     out.append("")
     out.append(
         f"Risk-free rate pinned at {E2E_RISK_FREE * 100:.2f}%, equity risk premium "
-        f"at {DEFAULT_EQUITY_RISK_PREMIUM * 100:.2f}%, terminal growth 2.50%, "
-        "5-year projection."
+        f"at {DEFAULT_EQUITY_RISK_PREMIUM * 100:.2f}%, terminal growth "
+        f"{SLIDER_BOUNDS['terminal_growth'][0]:.2f}%, "
+        f"{PROJECTION_YEARS[0]}-year projection."
     )
     out.append("")
     out.append(
@@ -120,30 +123,31 @@ def render(rows: List[Row]) -> str:
     )
     out.append("|---|---|---|---|---|---|---|---|---|---|")
     for r in sorted(priced, key=lambda r: r.company.beta or 0):
-        c = r.company
-        recorded = replay.load(r.symbol).recorded_at
-        beta = "—" if c.beta is None else f"{c.beta:.2f}"
+        company = r.company
+        beta = "—" if company.beta is None else f"{company.beta:.2f}"
         wacc = _pct(r.wacc_pct, 2) + ("" if r.wacc_derived else " *(default)*")
         hist = _pct(
-            None if c.historical_revenue_growth is None
-            else c.historical_revenue_growth * 100
+            None if company.historical_revenue_growth is None
+            else company.historical_revenue_growth * 100
         )
-        implied = _pct(
-            None if r.implied_growth is None else r.implied_growth * 100
-        ) if r.implied_growth is not None else "**none found**"
+        implied = (
+            "**none found**"
+            if r.implied_growth is None
+            else _pct(r.implied_growth * 100)
+        )
         out.append(
-            f"| {r.symbol} | {recorded} | {beta} | {wacc} | {hist} | "
-            f"{_money(c.current_price)} | {_money(r.model_price)} | "
+            f"| {r.symbol} | {r.recorded_at} | {beta} | {wacc} | {hist} | "
+            f"{_money(company.current_price)} | {_money(r.model_price)} | "
             f"{_pct(r.gap_pct)} | {_pct(r.tv_share_pct)} | {implied} |"
         )
     out.append("")
 
     notes: List[str] = []
     for r in sorted(priced, key=lambda r: r.symbol):
-        c = r.company
-        if c.is_dcf_inappropriate:
+        company = r.company
+        if company.is_dcf_inappropriate:
             notes.append(
-                f"- **{r.symbol}** is in {c.sector}, where a free-cash-flow DCF "
+                f"- **{r.symbol}** is in {company.sector}, where a free-cash-flow DCF "
                 "is the wrong tool. The app flags it and values it anyway."
             )
         for field in sorted(r.clamped):
@@ -152,13 +156,13 @@ def render(rows: List[Row]) -> str:
                 "slider range, so the model is not valuing the company its own "
                 "history describes."
             )
-        if r.implied_growth is None and c.current_price:
+        if r.implied_growth is None and company.current_price:
             notes.append(
                 f"- **{r.symbol}**: the reverse DCF found no revenue growth rate "
                 "in its search range that reproduces the market price, and "
                 "returned nothing rather than guessing."
             )
-        for w in c.warnings:
+        for w in company.warnings:
             notes.append(f"- **{r.symbol}**: {w}")
 
     if notes:
