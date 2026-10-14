@@ -199,6 +199,14 @@ def test_a_bank_is_flagged_as_the_wrong_shape_for_this_model():
     assert "financial" in warnings or "dcf" in warnings
     assert "Valuation" in body(at), "it should still render a valuation"
 
+    # JPM's recorded working-capital history sits far outside the slider's
+    # range, so the default is clamped. The sidebar has to say which input.
+    notices = " ".join(i.value for i in at.sidebar.info)
+    assert "Working capital / revenue" in notices, (
+        "a clamped default must be named in the sidebar, not applied silently"
+    )
+    assert "Operating margin" not in notices, "only clamped inputs should be named"
+
 
 def test_a_delisted_company_fails_with_a_message_a_human_can_act_on(monkeypatch):
     """Karuna: acquired by Bristol-Myers in March 2024, no longer reporting.

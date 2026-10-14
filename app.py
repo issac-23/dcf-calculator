@@ -100,6 +100,18 @@ def _cached_risk_free() -> tuple[float, bool]:
     return fetch_risk_free_rate()
 
 
+# Slider labels by SLIDER_BOUNDS field, shared by the widgets and the notice
+# that names which seeded defaults had to be clamped.
+_SLIDER_LABELS = {
+    "revenue_growth": "Revenue growth (annual)",
+    "operating_margin": "Operating margin",
+    "tax_rate": "Tax rate",
+    "capex_pct": "Capex / revenue",
+    "da_pct": "D&A / revenue",
+    "wc_pct": "Working capital / revenue",
+}
+
+
 def _format_money(x: float) -> str:
     if x is None:
         return "—"
@@ -173,27 +185,35 @@ with st.sidebar:
     # Defaults and bounds both come from dcf/assumptions.py, so this page and
     # the E2E valuation report start from the same inputs by construction.
     risk_free, rf_is_live = _cached_risk_free()
-    seeded = seed_inputs(company, risk_free, DEFAULT_EQUITY_RISK_PREMIUM).inputs
+    seed = seed_inputs(company, risk_free, DEFAULT_EQUITY_RISK_PREMIUM)
+    seeded = seed.inputs
 
-    def _pct_slider(label: str, field: str, default: float, **kwargs) -> float:
+    def _pct_slider(field: str, default: float, **kwargs) -> float:
         _, lo, hi = SLIDER_BOUNDS[field]
-        return st.slider(label, lo, hi, default * 100, 0.5, format="%.1f%%", **kwargs)
+        return st.slider(
+            _SLIDER_LABELS[field], lo, hi, default * 100, 0.5, format="%.1f%%", **kwargs
+        )
 
-    revenue_growth = _pct_slider(
-        "Revenue growth (annual)", "revenue_growth", seeded.revenue_growth
-    )
-    operating_margin = _pct_slider(
-        "Operating margin", "operating_margin", seeded.operating_margin
-    )
-    tax_rate = _pct_slider("Tax rate", "tax_rate", seeded.tax_rate)
-    capex_pct = _pct_slider("Capex / revenue", "capex_pct", seeded.capex_pct)
-    da_pct = _pct_slider("D&A / revenue", "da_pct", seeded.da_pct)
+    revenue_growth = _pct_slider("revenue_growth", seeded.revenue_growth)
+    operating_margin = _pct_slider("operating_margin", seeded.operating_margin)
+    tax_rate = _pct_slider("tax_rate", seeded.tax_rate)
+    capex_pct = _pct_slider("capex_pct", seeded.capex_pct)
+    da_pct = _pct_slider("da_pct", seeded.da_pct)
     wc_pct_input = _pct_slider(
-        "Working capital / revenue",
         "wc_pct",
         seeded.wc_pct,
         help="Working capital balance as a percent of revenue. Year-over-year changes drive ΔWC in the FCF calc.",
     )
+
+    if seed.clamped:
+        names = ", ".join(
+            label for field, label in _SLIDER_LABELS.items() if field in seed.clamped
+        )
+        st.info(
+            f"{company.ticker}'s historical average for {names} falls outside the "
+            "slider's range, so the default was clamped to the nearest bound. "
+            "The model is not using the figure the history actually shows."
+        )
 
     st.markdown("---")
     st.markdown("##### Discount rate & terminal value")
