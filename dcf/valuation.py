@@ -26,7 +26,15 @@ import numpy as np
 from dcf.assumptions import ASSUMPTIONS, seed_inputs
 from dcf.caveats import Caveat, CaveatKind, find_caveats
 from dcf.data import CompanyData
-from dcf.engine import DCFInputs, DCFResult, implied_revenue_growth, run_dcf, sensitivity_grid
+from dcf.engine import (
+    REVENUE_GROWTH_MAX,
+    REVENUE_GROWTH_MIN,
+    DCFInputs,
+    DCFResult,
+    implied_revenue_growth,
+    run_dcf,
+    sensitivity_grid,
+)
 from dcf.wacc import WACCBreakdown
 
 # Fair value more than this far from the market price is called under- or
@@ -57,6 +65,8 @@ class ImpliedGrowth:
     # either side is missing.
     gap_vs_history: Optional[float]
     reading: Optional[GrowthReading]
+    # The growth range the solver searched, as fractions: (low, high).
+    search_range: tuple = (REVENUE_GROWTH_MIN, REVENUE_GROWTH_MAX)
 
 
 @dataclass(frozen=True)

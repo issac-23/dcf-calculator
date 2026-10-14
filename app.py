@@ -243,6 +243,10 @@ wacc_breakdown = valuation.wacc
 # each is shown where the reader is looking at the thing it qualifies.
 
 
+def _signed_pct(x: float) -> str:
+    return f"{'−' if x < 0 else '+'}{abs(x) * 100:.0f}%"
+
+
 def _say(caveat: Caveat) -> str:
     kind = caveat.kind
     if kind is CaveatKind.WRONG_SECTOR:
@@ -275,8 +279,10 @@ def _say(caveat: Caveat) -> str:
             "a leveraged company."
         )
     if kind is CaveatKind.NO_IMPLIED_GROWTH:
+        low, high = valuation.implied.search_range
         return (
-            "No revenue growth rate between −50% and +100% reproduces the current "
+            f"No revenue growth rate between {_signed_pct(low)} and "
+            f"{_signed_pct(high)} reproduces the current "
             "price under the other assumptions. Try adjusting margin, WACC, or "
             "terminal growth."
         )

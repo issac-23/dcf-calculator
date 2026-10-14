@@ -203,6 +203,7 @@ def test_a_price_the_model_cannot_reach_reports_nothing_rather_than_guessing():
     assert_page_shows_the_reports_fair_value(at, "TSLA")
     assert_page_shows_the_verdict(at, "overvalued")
     assert "Valuation" in page_text(at)
+    assert "between −50% and +100%" in page_text(at), "the page should name the range it searched"
     assert len(at.dataframe) == 1
 
 
