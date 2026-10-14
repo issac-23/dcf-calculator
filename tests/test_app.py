@@ -20,11 +20,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-import streamlit as st
 from streamlit.testing.v1 import AppTest
 
-import dcf.data
 from dcf.data import CompanyData, build_company_data
 
 from tests.e2e import replay
@@ -33,22 +30,6 @@ from tests.e2e import replay
 # not the working directory, so "app.py" would look for tests/app.py. Build an
 # absolute path instead -- that holds regardless of where pytest is invoked.
 APP = str(Path(__file__).resolve().parent.parent / "app.py")
-
-
-@pytest.fixture(autouse=True)
-def offline_risk_free(monkeypatch):
-    """Pin the risk-free rate so these tests stay offline and deterministic.
-
-    app.py fetches the 10-year Treasury for the CAPM derivation. That call
-    swallows its own errors and falls back, so it never fails the suite -- it
-    just quietly reaches for the network and waits. Left alone it took the run
-    from 7s to 37s. Patching the source keeps the whole suite hermetic, which
-    is a property test_data.py's docstring already claims.
-    """
-    monkeypatch.setattr(dcf.data, "fetch_risk_free_rate", lambda: (0.042, True))
-    st.cache_data.clear()
-    yield
-    st.cache_data.clear()
 
 
 def _fake_company(**overrides) -> CompanyData:

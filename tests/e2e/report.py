@@ -15,15 +15,16 @@ from typing import List, Optional
 
 from dcf.assumptions import ASSUMPTIONS
 from dcf.data import CompanyData, DataFetchError, build_company_data
+from dcf.market import fetch_risk_free_rate
 from dcf.valuation import Valuation, run_valuation
 from dcf.wacc import DEFAULT_EQUITY_RISK_PREMIUM
 
 from tests.e2e import replay
 
-# Pinned, not fetched. The live 10-year Treasury moves daily and would make
-# the snapshot churn for reasons that have nothing to do with our code. This
-# was the real rate on the day the fixtures were recorded.
-E2E_RISK_FREE = 0.0518
+# Pinned, not fetched: the recorded source's Treasury quote, run through the
+# same parsing the app uses. It was the real rate on the day the fixtures were
+# recorded.
+E2E_RISK_FREE, _ = fetch_risk_free_rate(replay.RecordedSource())
 
 
 class TickerResult:

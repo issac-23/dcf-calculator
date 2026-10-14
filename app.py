@@ -8,11 +8,12 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from dcf.assumptions import ASSUMPTIONS, seed_inputs, seeded_wacc_pct
-from dcf.data import (
-    CompanyData,
-    DataFetchError,
+from dcf.data import CompanyData, DataFetchError
+from dcf.market import (
     fetch_company_data,
     fetch_risk_free_rate,
+    load_source,
+    source_spec,
 )
 from dcf.valuation import run_valuation
 
@@ -80,14 +81,17 @@ _PLOT_LAYOUT = dict(
 )
 
 
+# The market-data source is chosen once per run (live unless DCF_MARKET_SOURCE
+# names another). Its spec is an argument so that a cached answer from one
+# source is never served for another.
 @st.cache_data(ttl=3600, show_spinner=False)
-def _cached_fetch(ticker: str) -> CompanyData:
-    return fetch_company_data(ticker)
+def _cached_fetch(ticker: str, source: str) -> CompanyData:
+    return fetch_company_data(load_source(), ticker)
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def _cached_risk_free() -> tuple[float, bool]:
-    return fetch_risk_free_rate()
+def _cached_risk_free(source: str) -> tuple[float, bool]:
+    return fetch_risk_free_rate(load_source())
 
 
 def _format_money(x: float) -> str:
@@ -135,7 +139,7 @@ if "company" not in st.session_state:
 if load_clicked and ticker_input:
     try:
         with st.spinner(f"Fetching {ticker_input}..."):
-            st.session_state.company = _cached_fetch(ticker_input)
+            st.session_state.company = _cached_fetch(ticker_input, source_spec())
     except DataFetchError as e:
         st.session_state.company = None
         st.error(str(e))
@@ -162,7 +166,7 @@ with st.sidebar:
 
     # Defaults and bounds both come from dcf/assumptions.py, so this page and
     # the E2E valuation report start from the same inputs by construction.
-    risk_free, rf_is_live = _cached_risk_free()
+    risk_free, rf_is_live = _cached_risk_free(source_spec())
     seed = seed_inputs(company, risk_free, ASSUMPTIONS["erp"].fallback / 100)
     seeded = seed.inputs
 
