@@ -128,7 +128,7 @@ def seeded_wacc_pct(breakdown: Optional[WACCBreakdown]) -> float:
     return float(clamp(breakdown.wacc * 100, WACC_MIN_PCT, WACC_MAX_PCT))
 
 
-class Seeded(NamedTuple):
+class SeededAssumptions(NamedTuple):
     inputs: DCFInputs
     wacc: Optional[WACCBreakdown]
     wacc_reason: Optional[str]
@@ -139,7 +139,7 @@ def seed_inputs(
     company: CompanyData,
     risk_free: float,
     erp: float,
-) -> Seeded:
+) -> SeededAssumptions:
     """Everything the app would show on first load, with no slider touched."""
     breakdown, reason = derive_wacc(company, risk_free, erp)
     inputs = DCFInputs(
@@ -156,4 +156,4 @@ def seed_inputs(
         wacc=seeded_wacc_pct(breakdown) / 100,
         projection_years=PROJECTION_YEARS[0],
     )
-    return Seeded(inputs, breakdown, reason, clamped_from_history(company))
+    return SeededAssumptions(inputs, breakdown, reason, clamped_from_history(company))

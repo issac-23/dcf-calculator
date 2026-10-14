@@ -29,10 +29,7 @@ import streamlit as st
 from streamlit.testing.v1 import AppTest
 
 import dcf.data
-from dcf.assumptions import seed_inputs
 from dcf.data import DataFetchError, build_company_data
-from dcf.engine import run_dcf
-from dcf.wacc import DEFAULT_EQUITY_RISK_PREMIUM
 
 from tests.e2e import replay, report
 
@@ -51,8 +48,12 @@ def offline(monkeypatch):
     st.cache_data.clear()
 
 
-def company(symbol):
+def build_company(symbol):
     return build_company_data(symbol, replay.load(symbol))
+
+
+def exceptions(at: AppTest) -> str:
+    return "; ".join(str(e.value) for e in at.exception)
 
 
 def load_via_the_button(monkeypatch, symbol) -> AppTest:
@@ -60,11 +61,11 @@ def load_via_the_button(monkeypatch, symbol) -> AppTest:
 
     Only the network call itself is replaced — the button, the spinner, the
     session-state write and both error branches are the real ones. Injecting
-    session_state directly (as render_app does) skips all of that, which is
-    how the load handler went untested for the life of the app.
+    session_state directly would skip all of that, which is how the load
+    handler went untested for the life of the app.
     """
     def fake_fetch(ticker: str):
-        return build_company_data(ticker.strip().upper(), replay.load(ticker))
+        return build_company(ticker.strip().upper())
 
     monkeypatch.setattr(dcf.data, "fetch_company_data", fake_fetch)
     st.cache_data.clear()
@@ -73,7 +74,7 @@ def load_via_the_button(monkeypatch, symbol) -> AppTest:
     at.run()
     at.text_input[0].set_value(symbol)
     at.button[0].click().run()
-    assert not at.exception, "; ".join(str(e.value) for e in at.exception)
+    assert not at.exception, exceptions(at)
     return at
 
 
@@ -92,10 +93,10 @@ def assert_page_shows_the_reports_fair_value(at: AppTest, symbol: str) -> None:
     )
 
 
-def body(at: AppTest) -> str:
+def page_text(at: AppTest) -> str:
     return " ".join(
         [m.value for m in at.markdown]
-        + [c.value for c in at.caption]
+        + [cap.value for cap in at.caption]
         + [w.value for w in at.warning]
         + [i.value for i in at.info]
     )
@@ -121,7 +122,7 @@ def test_a_stable_company_values_near_its_market_price_and_the_page_renders(monk
 
     at = load_via_the_button(monkeypatch, "JNJ")
     assert_page_shows_the_reports_fair_value(at, "JNJ")
-    text = body(at)
+    text = page_text(at)
     for section in ("Valuation", "Free cash flow projection", "Reverse DCF",
                     "Sensitivity analysis", "Cost of capital"):
         assert section in text, f"{section!r} missing from the rendered page"
@@ -139,7 +140,7 @@ def test_typing_a_ticker_and_clicking_load_gets_you_a_valuation(monkeypatch):
 
     assert not at.error, "; ".join(e.value for e in at.error)
     assert at.session_state["company"].ticker == "JNJ"
-    assert "Valuation" in body(at)
+    assert "Valuation" in page_text(at)
     assert len(at.dataframe) == 1
 
 
@@ -166,7 +167,7 @@ def test_a_volatile_company_is_discounted_far_below_market_and_says_why(monkeypa
 
     at = load_via_the_button(monkeypatch, "AAPL")
     assert_page_shows_the_reports_fair_value(at, "AAPL")
-    assert "Reverse DCF" in body(at)
+    assert "Reverse DCF" in page_text(at)
 
 
 def test_a_price_the_model_cannot_reach_reports_nothing_rather_than_guessing(monkeypatch):
@@ -188,7 +189,7 @@ def test_a_price_the_model_cannot_reach_reports_nothing_rather_than_guessing(mon
 
     at = load_via_the_button(monkeypatch, "TSLA")
     assert_page_shows_the_reports_fair_value(at, "TSLA")
-    assert "Valuation" in body(at)
+    assert "Valuation" in page_text(at)
     assert len(at.dataframe) == 1
 
 
@@ -198,16 +199,16 @@ def test_a_bank_is_flagged_as_the_wrong_shape_for_this_model(monkeypatch):
     The app does not refuse to value it — refusing would be worse, because
     the user would not learn why. It values it and says the tool is wrong.
     """
-    c = company("JPM")
+    bank = build_company("JPM")
 
-    assert c.is_dcf_inappropriate
-    assert c.warnings, "an inappropriate sector must produce a visible warning"
+    assert bank.is_dcf_inappropriate
+    assert bank.warnings, "an inappropriate sector must produce a visible warning"
 
     at = load_via_the_button(monkeypatch, "JPM")
     assert_page_shows_the_reports_fair_value(at, "JPM")
     warnings = " ".join(w.value for w in at.warning).lower()
     assert "financial" in warnings or "dcf" in warnings
-    assert "Valuation" in body(at), "it should still render a valuation"
+    assert "Valuation" in page_text(at), "it should still render a valuation"
 
     # JPM's recorded working-capital history sits far outside the slider's
     # range, so the default is clamped. The sidebar has to say which input.
@@ -227,7 +228,7 @@ def test_a_delisted_company_fails_with_a_message_a_human_can_act_on(monkeypatch)
     missing thing instead of surfacing a KeyError.
     """
     with pytest.raises(DataFetchError) as excinfo:
-        company("KRTX")
+        build_company("KRTX")
 
     message = str(excinfo.value)
     assert "KRTX" in message
@@ -237,7 +238,6 @@ def test_a_delisted_company_fails_with_a_message_a_human_can_act_on(monkeypatch)
     # error, with the app still standing and still asking for a ticker.
     at = load_via_the_button(monkeypatch, "KRTX")
 
-    assert not at.exception, "the failure must be handled, not raised"
     errors = " ".join(e.value for e in at.error)
     assert "KRTX" in errors and "revenue" in errors.lower()
     assert at.session_state["company"] is None
