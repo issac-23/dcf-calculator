@@ -101,14 +101,6 @@ def test_historical_operating_margin_is_mean():
     assert cd.historical_operating_margin == pytest.approx(sum(margins) / 4, rel=1e-6)
 
 
-def test_negative_operating_margin_emits_warning():
-    fix = _full_fixture()
-    cols = fix.financials.columns
-    fix.financials.loc["Operating Income", cols] = [-50_000, -40_000, -30_000, -20_000]
-    cd = build_company_data("TEST", fix)
-    assert any("negative" in w.lower() for w in cd.warnings)
-
-
 # ----- defensive handling --------------------------------------------------
 
 
@@ -177,7 +169,6 @@ def test_total_debt_is_none_when_not_reported_and_net_debt_says_so():
     tk.info = {k: v for k, v in tk.info.items() if k != "totalDebt"}
     d = build_company_data("TEST", tk)
     assert d.total_debt is None
-    assert any("total debt" in w.lower() for w in d.warnings)
 
 
 def test_interest_expense_falls_back_to_the_non_operating_line():

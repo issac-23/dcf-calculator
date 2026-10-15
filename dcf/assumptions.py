@@ -10,49 +10,126 @@ Nothing here touches Streamlit or the network.
 
 from __future__ import annotations
 
-from typing import NamedTuple, Optional
+from dataclasses import dataclass
+from typing import Literal, NamedTuple, Optional
 
 from dcf.data import CompanyData
 from dcf.engine import DCFInputs
-from dcf.wacc import WACCBreakdown, WACCInputs, WACCUnavailable, compute_wacc
+from dcf.wacc import (
+    DEFAULT_EQUITY_RISK_PREMIUM,
+    WACCBreakdown,
+    WACCInputs,
+    WACCUnavailable,
+    compute_wacc,
+)
 
 # The US federal statutory rate, used when a filing history gives no effective
 # rate to work from.
 FALLBACK_TAX_RATE = 0.21
 
-# Each slider's (fallback, min, max) in percent points. app.py builds its
-# widgets from these, so they are the real widget bounds: a historical average
-# outside them is clamped, which is a documented limitation rather than an
-# accident (see LIMITATIONS.md section 5 -- NVDA's 100% historical growth
-# clamps to 30%). Terminal growth has no history to seed from, so its
-# fallback is simply the default.
-SLIDER_BOUNDS = {
-    "revenue_growth": (5.0, -10.0, 30.0),
-    "operating_margin": (15.0, -20.0, 60.0),
-    "tax_rate": (21.0, 0.0, 40.0),
-    "capex_pct": (5.0, 0.0, 30.0),
-    "da_pct": (5.0, 0.0, 30.0),
-    "wc_pct": (2.0, -10.0, 30.0),
-    "terminal_growth": (2.5, 0.0, 5.0),
-}
 
-# (default, min, max) in whole years.
-PROJECTION_YEARS = (5, 3, 10)
+@dataclass(frozen=True)
+class Assumption:
+    """Everything the model and the page need to know about one assumption.
 
-WACC_MIN_PCT, WACC_MAX_PCT = 4.0, 20.0
-WACC_FALLBACK_PCT = 9.0
+    Values are in the unit a person sees: percent points for "%", whole years
+    for "years". Adding an assumption is adding one entry to ASSUMPTIONS --
+    the sliders, the seeding and the clamping all iterate it.
+    """
+
+    key: str
+    label: str
+    fallback: float
+    lo: float
+    hi: float
+    step: float
+    # "operating" assumptions sit above the discount-rate heading, "discount"
+    # ones under it.
+    group: Literal["operating", "discount"]
+    unit: Literal["%", "years"] = "%"
+    # The CompanyData field whose history seeds the default, if there is one.
+    # Without it the default is just the fallback (or, for WACC, CAPM).
+    history: Optional[str] = None
+    help: Optional[str] = None
+    # Help to show instead when the default could not be derived from data.
+    help_unseeded: Optional[str] = None
+
+    @property
+    def format(self) -> Optional[str]:
+        if self.unit == "years":
+            return None
+        return "%.1f%%" if self.step >= 0.5 else "%.2f%%"
+
+
+# The bounds are the real widget bounds: a historical average outside them is
+# clamped, which is a documented limitation rather than an accident (see
+# LIMITATIONS.md section 5 -- NVDA's 100% historical growth clamps to 30%).
+_SPECS = (
+    Assumption(
+        "revenue_growth", "Revenue growth (annual)", 5.0, -10.0, 30.0, 0.5,
+        "operating", history="historical_revenue_growth",
+    ),
+    Assumption(
+        "operating_margin", "Operating margin", 15.0, -20.0, 60.0, 0.5,
+        "operating", history="historical_operating_margin",
+    ),
+    Assumption(
+        "tax_rate", "Tax rate", 21.0, 0.0, 40.0, 0.5,
+        "operating", history="historical_tax_rate",
+    ),
+    Assumption(
+        "capex_pct", "Capex / revenue", 5.0, 0.0, 30.0, 0.5,
+        "operating", history="historical_capex_pct",
+    ),
+    Assumption(
+        "da_pct", "D&A / revenue", 5.0, 0.0, 30.0, 0.5,
+        "operating", history="historical_da_pct",
+    ),
+    Assumption(
+        "wc_pct", "Working capital / revenue", 2.0, -10.0, 30.0, 0.5,
+        "operating", history="historical_wc_pct",
+        help=(
+            "Working capital balance as a percent of revenue. Year-over-year "
+            "changes drive ΔWC in the FCF calc."
+        ),
+    ),
+    Assumption(
+        "erp", "Equity risk premium", DEFAULT_EQUITY_RISK_PREMIUM * 100, 3.0, 8.0, 0.25,
+        "discount",
+        help=(
+            "The only CAPM input that cannot be looked up — it is an assumption "
+            "about future returns, not a measurement. Damodaran's implied "
+            "premium for mature markets has sat in the 4–6% band for years."
+        ),
+    ),
+    # Seeded from CAPM when it can be derived, which is why it has no history.
+    Assumption(
+        "wacc", "WACC (discount rate)", 9.0, 4.0, 20.0, 0.25, "discount",
+        help=(
+            "Seeded from CAPM using this company's beta and capital structure. "
+            "Drag to override."
+        ),
+        help_unseeded="Could not be derived for this ticker, so this is a generic default.",
+    ),
+    Assumption("terminal_growth", "Terminal growth rate", 2.5, 0.0, 5.0, 0.25, "discount"),
+    Assumption(
+        "projection_years", "Projection years", 5, 3, 10, 1, "discount", unit="years"
+    ),
+)
+
+ASSUMPTIONS = {a.key: a for a in _SPECS}
 
 
 def clamp(value: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, value))
 
 
-def default_pct(historical: Optional[float], field: str) -> float:
+def default_pct(historical: Optional[float], key: str) -> float:
     """Pick a slider default in percent points, clamped to the slider's range."""
-    fallback, lo, hi = SLIDER_BOUNDS[field]
+    spec = ASSUMPTIONS[key]
     if historical is None:
-        return fallback
-    return float(clamp(historical * 100, lo, hi))
+        return spec.fallback
+    return float(clamp(historical * 100, spec.lo, spec.hi))
 
 
 def clamped_from_history(company: CompanyData) -> set[str]:
@@ -61,21 +138,11 @@ def clamped_from_history(company: CompanyData) -> set[str]:
     Reported so the caller can say so out loud. A silently clamped default
     means the model is not valuing the company its own data describes.
     """
-    historicals = {
-        "revenue_growth": company.historical_revenue_growth,
-        "operating_margin": company.historical_operating_margin,
-        "tax_rate": company.historical_tax_rate,
-        "capex_pct": company.historical_capex_pct,
-        "da_pct": company.historical_da_pct,
-        "wc_pct": company.historical_wc_pct,
-    }
     clipped = set()
-    for field, value in historicals.items():
-        if value is None:
-            continue
-        _, lo, hi = SLIDER_BOUNDS[field]
-        if not (lo <= value * 100 <= hi):
-            clipped.add(field)
+    for spec in ASSUMPTIONS.values():
+        value = getattr(company, spec.history) if spec.history else None
+        if value is not None and not (spec.lo <= value * 100 <= spec.hi):
+            clipped.add(spec.key)
     return clipped
 
 
@@ -123,9 +190,10 @@ def derive_wacc(
 
 def seeded_wacc_pct(breakdown: Optional[WACCBreakdown]) -> float:
     """The percent-point value the WACC slider opens on."""
+    spec = ASSUMPTIONS["wacc"]
     if breakdown is None:
-        return WACC_FALLBACK_PCT
-    return float(clamp(breakdown.wacc * 100, WACC_MIN_PCT, WACC_MAX_PCT))
+        return spec.fallback
+    return float(clamp(breakdown.wacc * 100, spec.lo, spec.hi))
 
 
 class SeededAssumptions(NamedTuple):
@@ -142,18 +210,18 @@ def seed_inputs(
 ) -> SeededAssumptions:
     """Everything the app would show on first load, with no slider touched."""
     breakdown, reason = derive_wacc(company, risk_free, erp)
+    fields = {
+        spec.key: default_pct(getattr(company, spec.history), spec.key) / 100
+        for spec in ASSUMPTIONS.values()
+        if spec.history
+    }
     inputs = DCFInputs(
         revenue_base=company.revenue_base,
         shares_outstanding=company.shares_outstanding,
         net_debt=company.net_debt,
-        revenue_growth=default_pct(company.historical_revenue_growth, "revenue_growth") / 100,
-        operating_margin=default_pct(company.historical_operating_margin, "operating_margin") / 100,
-        tax_rate=default_pct(company.historical_tax_rate, "tax_rate") / 100,
-        capex_pct=default_pct(company.historical_capex_pct, "capex_pct") / 100,
-        da_pct=default_pct(company.historical_da_pct, "da_pct") / 100,
-        wc_pct=default_pct(company.historical_wc_pct, "wc_pct") / 100,
-        terminal_growth=SLIDER_BOUNDS["terminal_growth"][0] / 100,
+        terminal_growth=ASSUMPTIONS["terminal_growth"].fallback / 100,
         wacc=seeded_wacc_pct(breakdown) / 100,
-        projection_years=PROJECTION_YEARS[0],
+        projection_years=ASSUMPTIONS["projection_years"].fallback,
+        **fields,
     )
     return SeededAssumptions(inputs, breakdown, reason, clamped_from_history(company))

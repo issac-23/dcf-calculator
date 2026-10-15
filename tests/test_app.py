@@ -20,11 +20,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-import streamlit as st
 from streamlit.testing.v1 import AppTest
 
-import dcf.data
 from dcf.data import CompanyData, build_company_data
 
 from tests.e2e import replay
@@ -33,22 +30,6 @@ from tests.e2e import replay
 # not the working directory, so "app.py" would look for tests/app.py. Build an
 # absolute path instead -- that holds regardless of where pytest is invoked.
 APP = str(Path(__file__).resolve().parent.parent / "app.py")
-
-
-@pytest.fixture(autouse=True)
-def offline_risk_free(monkeypatch):
-    """Pin the risk-free rate so these tests stay offline and deterministic.
-
-    app.py fetches the 10-year Treasury for the CAPM derivation. That call
-    swallows its own errors and falls back, so it never fails the suite -- it
-    just quietly reaches for the network and waits. Left alone it took the run
-    from 7s to 37s. Patching the source keeps the whole suite hermetic, which
-    is a property test_data.py's docstring already claims.
-    """
-    monkeypatch.setattr(dcf.data, "fetch_risk_free_rate", lambda: (0.042, True))
-    st.cache_data.clear()
-    yield
-    st.cache_data.clear()
 
 
 def _fake_company(**overrides) -> CompanyData:
@@ -74,7 +55,6 @@ def _fake_company(**overrides) -> CompanyData:
         total_debt=5e8,
         interest_expense=2.5e7,
         is_dcf_inappropriate=False,
-        warnings=[],
     )
     defaults.update(overrides)
     return CompanyData(**defaults)
@@ -109,6 +89,13 @@ def test_missing_beta_explains_itself_instead_of_erroring():
     # The valuation still has to render.
     assert len(at.dataframe) == 1
     assert "Valuation" in " ".join(m.value for m in at.markdown)
+
+
+def test_negative_historical_margin_warns_before_it_shows_a_negative_value():
+    """The model compounds a negative margin into a negative fair value; the
+    page has to say why instead of presenting it as a verdict."""
+    at = _run(_fake_company(historical_operating_margin=-0.08))
+    assert any("margin is negative" in w.value for w in at.warning)
 
 
 def test_debt_without_interest_expense_warns_about_understating_wacc():

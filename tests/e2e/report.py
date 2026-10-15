@@ -13,34 +13,34 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from dcf.assumptions import PROJECTION_YEARS, SLIDER_BOUNDS, seed_inputs
+from dcf.assumptions import ASSUMPTIONS
+from dcf.caveats import Caveat, CaveatKind
 from dcf.data import CompanyData, DataFetchError, build_company_data
-from dcf.engine import implied_revenue_growth, run_dcf
+from dcf.market import fetch_risk_free_rate
+from dcf.valuation import Valuation, run_valuation
 from dcf.wacc import DEFAULT_EQUITY_RISK_PREMIUM
 
 from tests.e2e import replay
 
-# Pinned, not fetched. The live 10-year Treasury moves daily and would make
-# the snapshot churn for reasons that have nothing to do with our code. This
-# was the real rate on the day the fixtures were recorded.
-E2E_RISK_FREE = 0.0518
+# Pinned, not fetched: the recorded source's Treasury quote, run through the
+# same parsing the app uses. It was the real rate on the day the fixtures were
+# recorded.
+E2E_RISK_FREE, _ = fetch_risk_free_rate(replay.RecordedSource())
 
 
 class TickerResult:
-    """One ticker's trip through the model, or the error that stopped it."""
+    """One ticker's trip through the model, or the error that stopped it.
+
+    The numbers all live on `valuation`, the same object the app renders; the
+    report is a valuation with no overrides, so nothing is recomputed here.
+    """
 
     def __init__(self, symbol: str):
         self.symbol = symbol
         self.recorded_at: Optional[str] = None
         self.error: Optional[str] = None
         self.company: Optional[CompanyData] = None
-        self.wacc_pct: Optional[float] = None
-        self.wacc_derived = False
-        self.model_price: Optional[float] = None
-        self.gap_pct: Optional[float] = None
-        self.tv_share_pct: Optional[float] = None
-        self.implied_growth: Optional[float] = None
-        self.clamped: set = set()
+        self.valuation: Optional[Valuation] = None
 
 
 def evaluate(symbol: str) -> TickerResult:
@@ -55,24 +55,7 @@ def evaluate(symbol: str) -> TickerResult:
         return row
 
     row.company = company
-    seeded = seed_inputs(company, E2E_RISK_FREE, DEFAULT_EQUITY_RISK_PREMIUM)
-    row.wacc_pct = seeded.inputs.wacc * 100
-    row.wacc_derived = seeded.wacc is not None
-    row.clamped = seeded.clamped
-
-    result = run_dcf(seeded.inputs)
-    row.model_price = result.fair_value_per_share
-    if result.enterprise_value:
-        row.tv_share_pct = result.pv_terminal_value / result.enterprise_value * 100
-    if company.current_price:
-        row.gap_pct = (
-            (result.fair_value_per_share - company.current_price)
-            / company.current_price
-            * 100
-        )
-        row.implied_growth = implied_revenue_growth(
-            seeded.inputs, company.current_price
-        )
+    row.valuation = run_valuation(company, E2E_RISK_FREE)
     return row
 
 
@@ -88,6 +71,47 @@ def _money(x: Optional[float]) -> str:
     return "—" if x is None else f"${x:,.2f}"
 
 
+def _say(caveat: Caveat) -> str:
+    """The report's wording for each caveat: one line, after the ticker."""
+    kind = caveat.kind
+    if kind is CaveatKind.WRONG_SECTOR:
+        return (
+            f" is in {caveat.subject}, where a free-cash-flow DCF "
+            "is the wrong tool. The app flags it and values it anyway."
+        )
+    if kind is CaveatKind.DEFAULT_CLAMPED:
+        return (
+            f": the `{caveat.subject}` default was clamped to fit its "
+            "slider range, so the model is not valuing the company its own "
+            "history describes."
+        )
+    if kind is CaveatKind.NO_IMPLIED_GROWTH:
+        return (
+            ": the reverse DCF found no revenue growth rate "
+            "in its search range that reproduces the market price, and "
+            "returned nothing rather than guessing."
+        )
+    if kind is CaveatKind.DEBT_UNREPORTED:
+        return (
+            ": Yahoo did not report total debt for this ticker. Net debt "
+            "counts it as zero, which overstates equity value if the company "
+            "borrows."
+        )
+    if kind is CaveatKind.NEGATIVE_MARGIN:
+        return (
+            ": historical operating margin is negative, so the DCF returns a "
+            "negative fair value unless the margin assumption is adjusted."
+        )
+    if kind is CaveatKind.WACC_NOT_DERIVED:
+        return f": WACC could not be derived, so the generic default is used. {caveat.subject}"
+    if kind is CaveatKind.DEBT_COST_UNKNOWN:
+        return (
+            ": debt is reported but its cost is not, so the WACC is the cost "
+            "of equity alone and understates the cost of capital."
+        )
+    raise ValueError(f"no wording for {kind}")
+
+
 def render(rows: List[TickerResult]) -> str:
     out: List[str] = []
     out.append("# Valuation report")
@@ -101,8 +125,8 @@ def render(rows: List[TickerResult]) -> str:
     out.append(
         f"Risk-free rate pinned at {E2E_RISK_FREE * 100:.2f}%, equity risk premium "
         f"at {DEFAULT_EQUITY_RISK_PREMIUM * 100:.2f}%, terminal growth "
-        f"{SLIDER_BOUNDS['terminal_growth'][0]:.2f}%, "
-        f"{PROJECTION_YEARS[0]}-year projection."
+        f"{ASSUMPTIONS['terminal_growth'].fallback:.2f}%, "
+        f"{ASSUMPTIONS['projection_years'].fallback}-year projection."
     )
     out.append("")
     out.append(
@@ -124,46 +148,31 @@ def render(rows: List[TickerResult]) -> str:
     out.append("|---|---|---|---|---|---|---|---|---|---|")
     for r in sorted(priced, key=lambda r: r.company.beta or 0):
         company = r.company
+        v = r.valuation
         beta = "—" if company.beta is None else f"{company.beta:.2f}"
-        wacc = _pct(r.wacc_pct, 2) + ("" if r.wacc_derived else " *(default)*")
+        wacc = _pct(v.inputs.wacc * 100, 2) + ("" if v.wacc is not None else " *(default)*")
         hist = _pct(
             None if company.historical_revenue_growth is None
             else company.historical_revenue_growth * 100
         )
         implied = (
             "**none found**"
-            if r.implied_growth is None
-            else _pct(r.implied_growth * 100)
+            if v.implied is None or v.implied.rate is None
+            else _pct(v.implied.rate * 100)
         )
+        gap = None if v.upside is None else v.upside * 100
+        tv_share = None if v.tv_share is None else v.tv_share * 100
         out.append(
             f"| {r.symbol} | {r.recorded_at} | {beta} | {wacc} | {hist} | "
-            f"{_money(company.current_price)} | {_money(r.model_price)} | "
-            f"{_pct(r.gap_pct)} | {_pct(r.tv_share_pct)} | {implied} |"
+            f"{_money(company.current_price)} | {_money(v.result.fair_value_per_share)} | "
+            f"{_pct(gap)} | {_pct(tv_share)} | {implied} |"
         )
     out.append("")
 
     notes: List[str] = []
     for r in sorted(priced, key=lambda r: r.symbol):
-        company = r.company
-        if company.is_dcf_inappropriate:
-            notes.append(
-                f"- **{r.symbol}** is in {company.sector}, where a free-cash-flow DCF "
-                "is the wrong tool. The app flags it and values it anyway."
-            )
-        for field in sorted(r.clamped):
-            notes.append(
-                f"- **{r.symbol}**: the `{field}` default was clamped to fit its "
-                "slider range, so the model is not valuing the company its own "
-                "history describes."
-            )
-        if r.implied_growth is None and company.current_price:
-            notes.append(
-                f"- **{r.symbol}**: the reverse DCF found no revenue growth rate "
-                "in its search range that reproduces the market price, and "
-                "returned nothing rather than guessing."
-            )
-        for w in company.warnings:
-            notes.append(f"- **{r.symbol}**: {w}")
+        for caveat in r.valuation.caveats:
+            notes.append(f"- **{r.symbol}**{_say(caveat)}")
 
     if notes:
         out.append("## Notes")

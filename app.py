@@ -7,24 +7,16 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from dcf import DCFInputs, run_dcf
-from dcf.assumptions import (
-    PROJECTION_YEARS,
-    SLIDER_BOUNDS,
-    WACC_MAX_PCT,
-    WACC_MIN_PCT,
-    derive_wacc,
-    seed_inputs,
-    seeded_wacc_pct,
-)
-from dcf.data import (
-    CompanyData,
-    DataFetchError,
+from dcf.assumptions import ASSUMPTIONS, seed_inputs, seeded_wacc_pct
+from dcf.data import CompanyData, DataFetchError
+from dcf.market import (
     fetch_company_data,
     fetch_risk_free_rate,
+    load_source,
+    source_spec,
 )
-from dcf.engine import implied_revenue_growth, sensitivity_grid
-from dcf.wacc import DEFAULT_EQUITY_RISK_PREMIUM
+from dcf.caveats import Caveat, CaveatKind
+from dcf.valuation import run_valuation
 
 st.set_page_config(
     page_title="DCF Calculator",
@@ -90,26 +82,17 @@ _PLOT_LAYOUT = dict(
 )
 
 
+# The market-data source is chosen once per run (live unless DCF_MARKET_SOURCE
+# names another). Its spec is an argument so that a cached answer from one
+# source is never served for another.
 @st.cache_data(ttl=3600, show_spinner=False)
-def _cached_fetch(ticker: str) -> CompanyData:
-    return fetch_company_data(ticker)
+def _cached_fetch(ticker: str, source: str) -> CompanyData:
+    return fetch_company_data(load_source(), ticker)
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def _cached_risk_free() -> tuple[float, bool]:
-    return fetch_risk_free_rate()
-
-
-# Slider labels by SLIDER_BOUNDS field, shared by the widgets and the notice
-# that names which seeded defaults had to be clamped.
-_SLIDER_LABELS = {
-    "revenue_growth": "Revenue growth (annual)",
-    "operating_margin": "Operating margin",
-    "tax_rate": "Tax rate",
-    "capex_pct": "Capex / revenue",
-    "da_pct": "D&A / revenue",
-    "wc_pct": "Working capital / revenue",
-}
+def _cached_risk_free(source: str) -> tuple[float, bool]:
+    return fetch_risk_free_rate(load_source())
 
 
 def _format_money(x: float) -> str:
@@ -157,7 +140,7 @@ if "company" not in st.session_state:
 if load_clicked and ticker_input:
     try:
         with st.spinner(f"Fetching {ticker_input}..."):
-            st.session_state.company = _cached_fetch(ticker_input)
+            st.session_state.company = _cached_fetch(ticker_input, source_spec())
     except DataFetchError as e:
         st.session_state.company = None
         st.error(str(e))
@@ -184,99 +167,144 @@ with st.sidebar:
 
     # Defaults and bounds both come from dcf/assumptions.py, so this page and
     # the E2E valuation report start from the same inputs by construction.
-    risk_free, rf_is_live = _cached_risk_free()
-    seed = seed_inputs(company, risk_free, DEFAULT_EQUITY_RISK_PREMIUM)
+    risk_free, rf_is_live = _cached_risk_free(source_spec())
+    seed = seed_inputs(company, risk_free, ASSUMPTIONS["erp"].fallback / 100)
     seeded = seed.inputs
 
-    def _pct_slider(field: str, default: float, **kwargs) -> float:
-        _, lo, hi = SLIDER_BOUNDS[field]
-        return st.slider(
-            _SLIDER_LABELS[field], lo, hi, default * 100, 0.5, format="%.1f%%", **kwargs
-        )
+    values: dict[str, float] = {}
 
-    revenue_growth = _pct_slider("revenue_growth", seeded.revenue_growth)
-    operating_margin = _pct_slider("operating_margin", seeded.operating_margin)
-    tax_rate = _pct_slider("tax_rate", seeded.tax_rate)
-    capex_pct = _pct_slider("capex_pct", seeded.capex_pct)
-    da_pct = _pct_slider("da_pct", seeded.da_pct)
-    wc_pct_input = _pct_slider(
-        "wc_pct",
-        seeded.wc_pct,
-        help="Working capital balance as a percent of revenue. Year-over-year changes drive ΔWC in the FCF calc.",
-    )
+    def _slider(key: str, default: float, seeded_from_data: bool = True) -> float:
+        spec = ASSUMPTIONS[key]
+        kwargs = {} if spec.format is None else {"format": spec.format}
+        help_text = spec.help if seeded_from_data else spec.help_unseeded
+        if help_text:
+            kwargs["help"] = help_text
+        values[key] = st.slider(
+            spec.label, spec.lo, spec.hi, default, spec.step, **kwargs
+        )
+        return values[key]
 
-    if seed.clamped:
-        names = ", ".join(
-            label for field, label in _SLIDER_LABELS.items() if field in seed.clamped
-        )
-        st.info(
-            f"{company.ticker}'s historical average for {names} falls outside the "
-            "slider's range, so the default was clamped to the nearest bound. "
-            "The model is not using the figure the history actually shows."
-        )
+    def _seeded_default(spec) -> float:
+        # A history-backed assumption opens on its clamped historical average;
+        # everything else opens on its fallback.
+        if spec.history:
+            return getattr(seeded, spec.key) * 100
+        return spec.fallback
+
+    for spec in ASSUMPTIONS.values():
+        if spec.group == "operating":
+            _slider(spec.key, _seeded_default(spec))
+
+    # Filled in once the valuation has found its caveats, below.
+    clamped_notice = st.container()
 
     st.markdown("---")
     st.markdown("##### Discount rate & terminal value")
 
-    erp_pct = st.slider(
-        "Equity risk premium", 3.0, 8.0, DEFAULT_EQUITY_RISK_PREMIUM * 100, 0.25,
-        format="%.2f%%",
-        help=(
-            "The only CAPM input that cannot be looked up — it is an assumption "
-            "about future returns, not a measurement. Damodaran's implied "
-            "premium for mature markets has sat in the 4–6% band for years."
-        ),
-    )
-    wacc_breakdown, wacc_reason = derive_wacc(company, risk_free, erp_pct / 100)
+    for spec in ASSUMPTIONS.values():
+        if spec.group != "discount":
+            continue
+        if spec.key == "wacc":
+            # The derived figure seeds the slider rather than replacing it.
+            # WACC is the most consequential input in the model, so the user
+            # keeps the final say -- but the starting point is computed
+            # instead of a round 9%. It depends on the premium chosen above.
+            erp_seed = seed_inputs(company, risk_free, values["erp"] / 100)
+            _slider(
+                "wacc", seeded_wacc_pct(erp_seed.wacc), seeded_from_data=bool(erp_seed.wacc)
+            )
+            if erp_seed.wacc:
+                st.caption(f"Derived: **{erp_seed.wacc.wacc * 100:.2f}%**")
+            else:
+                st.caption(f"Not derived — {erp_seed.wacc_reason}")
+        else:
+            _slider(spec.key, spec.fallback)
 
-    # The derived figure seeds the slider rather than replacing it. WACC is
-    # the most consequential input in the model, so the user keeps the final
-    # say — but the starting point is now computed instead of a round 9%.
-    derived_pct = seeded_wacc_pct(wacc_breakdown)
-    wacc = st.slider(
-        "WACC (discount rate)", WACC_MIN_PCT, WACC_MAX_PCT, derived_pct, 0.25,
-        format="%.2f%%",
-        help=(
-            "Seeded from CAPM using this company's beta and capital structure. "
-            "Drag to override."
-            if wacc_breakdown
-            else "Could not be derived for this ticker, so this is a generic default."
-        ),
-    )
-    if wacc_breakdown:
-        st.caption(f"Derived: **{wacc_breakdown.wacc * 100:.2f}%**")
-    else:
-        st.caption(f"Not derived — {wacc_reason}")
-    tg_default, tg_lo, tg_hi = SLIDER_BOUNDS["terminal_growth"]
-    terminal_growth = st.slider(
-        "Terminal growth rate", tg_lo, tg_hi, tg_default, 0.25, format="%.2f%%"
-    )
-    years_default, years_lo, years_hi = PROJECTION_YEARS
-    projection_years = st.slider("Projection years", years_lo, years_hi, years_default)
+    revenue_growth = values["revenue_growth"]
+    erp_pct = values["erp"]
+    wacc = values["wacc"]
+    terminal_growth = values["terminal_growth"]
 
 
-# ----- build inputs --------------------------------------------------------
-
-inputs = DCFInputs(
-    revenue_base=company.revenue_base,
-    shares_outstanding=company.shares_outstanding,
-    net_debt=company.net_debt,
-    revenue_growth=revenue_growth / 100,
-    operating_margin=operating_margin / 100,
-    tax_rate=tax_rate / 100,
-    capex_pct=capex_pct / 100,
-    da_pct=da_pct / 100,
-    wc_pct=wc_pct_input / 100,
-    terminal_growth=terminal_growth / 100,
-    wacc=wacc / 100,
-    projection_years=projection_years,
-)
+# ----- the valuation ---------------------------------------------------------
 
 try:
-    result = run_dcf(inputs)
+    valuation = run_valuation(company, risk_free, values)
 except ValueError as e:
     st.error(f"Invalid assumptions: {e}")
     st.stop()
+
+result = valuation.result
+wacc_breakdown = valuation.wacc
+
+
+# ----- caveats -----------------------------------------------------------------
+# The valuation run finds them; this is the one place the page words them, and
+# each is shown where the reader is looking at the thing it qualifies.
+
+
+def _signed_pct(x: float) -> str:
+    return f"{'−' if x < 0 else '+'}{abs(x) * 100:.0f}%"
+
+
+def _say(caveat: Caveat) -> str:
+    kind = caveat.kind
+    if kind is CaveatKind.WRONG_SECTOR:
+        return (
+            f"DCF is unreliable for {caveat.subject.lower()} companies. "
+            "Banks should be valued using equity DCF or P/B; "
+            "REITs using FFO or NAV."
+        )
+    if kind is CaveatKind.DEBT_UNREPORTED:
+        return (
+            "Yahoo did not report total debt for this ticker. Net debt below "
+            "counts it as zero, which overstates equity value if the company "
+            "borrows."
+        )
+    if kind is CaveatKind.NEGATIVE_MARGIN:
+        return (
+            "Historical operating margin is negative. "
+            "The DCF will return a negative fair value unless you adjust margin assumptions."
+        )
+    if kind is CaveatKind.WACC_NOT_DERIVED:
+        return (
+            f"WACC could not be derived for {company.ticker} — {caveat.subject} "
+            f"The model is using the **{wacc:.2f}%** set in the sidebar."
+        )
+    if kind is CaveatKind.DEBT_COST_UNKNOWN:
+        return (
+            f"{company.ticker} carries {_format_money(company.total_debt)} of debt, but "
+            "no interest expense was reported, so its cost could not be established. "
+            "The figure above is the cost of equity only, which understates WACC for "
+            "a leveraged company."
+        )
+    if kind is CaveatKind.NO_IMPLIED_GROWTH:
+        low, high = valuation.implied.search_range
+        return (
+            f"No revenue growth rate between {_signed_pct(low)} and "
+            f"{_signed_pct(high)} reproduces the current "
+            "price under the other assumptions. Try adjusting margin, WACC, or "
+            "terminal growth."
+        )
+    if kind is CaveatKind.DEFAULT_CLAMPED:
+        raise ValueError("clamped defaults are worded together, see _say_clamped")
+    raise ValueError(f"no wording for {kind}")
+
+
+def _say_clamped(caveats) -> str:
+    keys = {c.subject for c in caveats}
+    names = ", ".join(spec.label for key, spec in ASSUMPTIONS.items() if key in keys)
+    return (
+        f"{company.ticker}'s historical average for {names} falls outside the "
+        "slider's range, so the default was clamped to the nearest bound. "
+        "The model is not using the figure the history actually shows."
+    )
+
+
+clamped = valuation.caveats_of(CaveatKind.DEFAULT_CLAMPED)
+if clamped:
+    with clamped_notice:
+        st.info(_say_clamped(clamped))
 
 
 # ----- company header ------------------------------------------------------
@@ -290,8 +318,9 @@ with header_right:
     if company.current_price:
         st.metric("Current price", f"${company.current_price:,.2f}")
 
-for w in company.warnings:
-    st.warning(w)
+for kind in (CaveatKind.DEBT_UNREPORTED, CaveatKind.WRONG_SECTOR, CaveatKind.NEGATIVE_MARGIN):
+    for caveat in valuation.caveats_of(kind):
+        st.warning(_say(caveat))
 
 
 # ----- valuation summary ---------------------------------------------------
@@ -300,17 +329,15 @@ st.markdown("### Valuation")
 
 fair_value = result.fair_value_per_share
 current = company.current_price or 0.0
+upside = valuation.upside
 
-if current > 0:
-    upside = (fair_value - current) / current
-    if upside > 0.10:
-        verdict = f"▲ {upside * 100:.1f}% undervalued"
-    elif upside < -0.10:
-        verdict = f"▼ {abs(upside) * 100:.1f}% overvalued"
-    else:
-        verdict = f"≈ Fairly valued ({upside * 100:+.1f}%)"
+if valuation.verdict == "undervalued":
+    verdict = f"▲ {upside * 100:.1f}% undervalued"
+elif valuation.verdict == "overvalued":
+    verdict = f"▼ {abs(upside) * 100:.1f}% overvalued"
+elif valuation.verdict == "fair":
+    verdict = f"≈ Fairly valued ({upside * 100:+.1f}%)"
 else:
-    upside = None
     verdict = "Current price unavailable"
 
 v1, v2, v3 = st.columns(3)
@@ -332,10 +359,7 @@ e3.metric("Net debt", _format_money(company.net_debt))
 st.markdown("### Cost of capital")
 
 if wacc_breakdown is None:
-    st.info(
-        f"WACC could not be derived for {company.ticker} — {wacc_reason} "
-        f"The model is using the **{wacc:.2f}%** set in the sidebar."
-    )
+    st.info(_say(valuation.caveats_of(CaveatKind.WACC_NOT_DERIVED)[0]))
 else:
     b = wacc_breakdown
     st.caption(
@@ -382,13 +406,8 @@ else:
         )
     )
 
-    if b.debt_cost_unknown:
-        st.warning(
-            f"{company.ticker} carries {_format_money(company.total_debt)} of debt, but "
-            "no interest expense was reported, so its cost could not be established. "
-            "The figure above is the cost of equity only, which understates WACC for "
-            "a leveraged company."
-        )
+    for caveat in valuation.caveats_of(CaveatKind.DEBT_COST_UNKNOWN):
+        st.warning(_say(caveat))
 
     with st.expander("Why this is an estimate"):
         st.markdown(
@@ -443,12 +462,17 @@ s1.metric("Sum of PV(FCF)", _format_money(result.sum_pv_fcf))
 s2.metric("Terminal value", _format_money(result.terminal_value))
 s3.metric("PV of terminal value", _format_money(result.pv_terminal_value))
 
+tv_share_text = (
+    ""
+    if valuation.tv_share is None
+    else f"Terminal value contributes {valuation.tv_share * 100:.0f}% of enterprise "
+    "value — the higher this share, the more your valuation depends on "
+    "assumptions about the distant future."
+)
 st.caption(
     f"Terminal value computed via Gordon Growth: "
     f"FCF × (1 + g) / (WACC − g), with g = {terminal_growth:.2f}% and WACC = {wacc:.2f}%. "
-    f"Terminal value contributes "
-    f"{result.pv_terminal_value / result.enterprise_value * 100:.0f}% of enterprise value — "
-    f"the higher this share, the more your valuation depends on assumptions about the distant future."
+    + tv_share_text
 )
 
 
@@ -489,7 +513,7 @@ st.plotly_chart(fcf_fig, width="stretch")
 
 # ----- reverse DCF ---------------------------------------------------------
 
-if company.current_price and company.current_price > 0:
+if valuation.implied is not None:
     st.markdown("### Reverse DCF")
     st.caption(
         "Instead of asking *what is this stock worth?*, ask *what growth rate "
@@ -497,18 +521,14 @@ if company.current_price and company.current_price > 0:
         "assumptions above are held fixed."
     )
 
-    implied = implied_revenue_growth(inputs, company.current_price)
+    implied = valuation.implied.rate
 
     r1, r2, r3 = st.columns(3)
     r1.metric("Current price", f"${company.current_price:,.2f}")
     if implied is None:
         r2.metric("Implied revenue growth", "—")
         r3.metric("Your assumption", f"{revenue_growth:.1f}%")
-        st.caption(
-            "No revenue growth rate between −50% and +100% reproduces the current "
-            "price under the other assumptions. Try adjusting margin, WACC, or "
-            "terminal growth."
-        )
+        st.caption(_say(valuation.caveats_of(CaveatKind.NO_IMPLIED_GROWTH)[0]))
     else:
         implied_pct = implied * 100
         delta = implied_pct - revenue_growth
@@ -524,25 +544,27 @@ if company.current_price and company.current_price > 0:
         else:
             r3.metric("Your assumption", f"{revenue_growth:.1f}%")
 
-        if hist is not None:
-            gap = implied_pct - hist * 100
-            if gap > 5:
-                interp = (
-                    f"The market is pricing in growth **{gap:.1f} pp above** the "
-                    "4-year historical average — an optimistic take that assumes "
-                    "the business accelerates."
-                )
-            elif gap < -5:
-                interp = (
-                    f"The market is pricing in growth **{abs(gap):.1f} pp below** "
-                    "the 4-year historical average — a pessimistic take that "
-                    "assumes the business decelerates."
-                )
-            else:
-                interp = (
-                    "The market's implied growth is roughly in line with the "
-                    "4-year historical average."
-                )
+        gap = valuation.implied.gap_vs_history
+        if valuation.implied.reading == "optimistic":
+            interp = (
+                f"The market is pricing in growth **{gap * 100:.1f} pp above** the "
+                "4-year historical average — an optimistic take that assumes "
+                "the business accelerates."
+            )
+        elif valuation.implied.reading == "pessimistic":
+            interp = (
+                f"The market is pricing in growth **{abs(gap) * 100:.1f} pp below** "
+                "the 4-year historical average — a pessimistic take that "
+                "assumes the business decelerates."
+            )
+        elif valuation.implied.reading == "in_line":
+            interp = (
+                "The market's implied growth is roughly in line with the "
+                "4-year historical average."
+            )
+        else:
+            interp = None
+        if interp:
             st.caption(interp)
 
 
@@ -554,11 +576,10 @@ st.caption(
     "If small moves change the answer drastically, your valuation is fragile."
 )
 
-wacc_grid = np.round(np.arange(max(0.04, wacc / 100 - 0.025), wacc / 100 + 0.026, 0.005), 4)
-g_grid = np.round(np.arange(0.0, 0.041, 0.005), 4)
-grid = sensitivity_grid(inputs, list(wacc_grid), list(g_grid))
+wacc_grid = valuation.sensitivity.wacc
+g_grid = valuation.sensitivity.terminal_growth
 
-heatmap_z = np.array(grid)
+heatmap_z = np.array(valuation.sensitivity.fair_value)
 text = np.where(
     np.isnan(heatmap_z),
     "—",

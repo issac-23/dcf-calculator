@@ -1,8 +1,11 @@
 """Replay recorded Yahoo Finance responses so the E2E suite is offline.
 
-The seam is `dcf.data.build_company_data(symbol, tk)`, which accepts anything
-with `.info`, `.financials` and `.cashflow`. `RecordedTicker` is that, backed
-by a JSON file in `fixtures/` captured from the real API by `record.py`.
+The seam is `dcf.market.MarketDataSource`. `RecordedSource` is its recorded
+adapter: `ticker()` hands back a `RecordedTicker` (anything with `.info`,
+`.financials` and `.cashflow`) backed by a JSON file in `fixtures/` captured
+from the real API by `record.py`, and `treasury_history()` returns a pinned
+10-year Treasury quote. The app picks it by setting DCF_MARKET_SOURCE to
+`tests.e2e.replay:recorded_source`; see tests/conftest.py.
 
 Recording rather than hand-writing the fixtures is the point. A hand-written
 dict encodes what we *believe* Yahoo returns; a recording encodes what it
@@ -15,8 +18,9 @@ data layer in the first place.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Sequence
 
 import pandas as pd
 
@@ -48,7 +52,7 @@ def frame_from_json(d: Dict[str, List[Any]]) -> pd.DataFrame:
 
 
 class RecordedTicker:
-    """Satisfies `dcf.data._TickerLike` from a recorded fixture."""
+    """Satisfies `dcf.data.Fundamentals` from a recorded fixture."""
 
     def __init__(self, payload: Dict[str, Any]):
         self.symbol: str = payload["symbol"]
@@ -69,3 +73,42 @@ def load(symbol: str) -> RecordedTicker:
 
 def available() -> List[str]:
     return sorted(p.stem for p in FIXTURES.glob("*.json"))
+
+
+# Pinned, not fetched. The live 10-year Treasury moves daily and would make
+# the snapshot churn for reasons that have nothing to do with our code. This
+# is ^TNX's close, in percent, on the day the fixtures were recorded (5.18%).
+# Re-recording it needs the live API, so it is not part of record.py.
+PINNED_TREASURY_CLOSE = (5.18,)
+
+# A journey that wants a different quote sets this to a comma-separated list
+# of closes ("4.10,4.96", "nan,nan"), "empty" for no quotes, or "error" for a
+# dead network. The quote then goes through the real parsing and fallback.
+TREASURY_ENV_VAR = "E2E_TREASURY_CLOSE"
+
+
+class RecordedSource:
+    """The recorded `dcf.market.MarketDataSource`: no network, ever."""
+
+    def __init__(self, treasury_close: Sequence[float] | Exception = PINNED_TREASURY_CLOSE):
+        self._treasury_close = treasury_close
+
+    def ticker(self, symbol: str) -> RecordedTicker:
+        return load(symbol)
+
+    def treasury_history(self) -> pd.DataFrame:
+        if isinstance(self._treasury_close, Exception):
+            raise self._treasury_close
+        return pd.DataFrame({"Close": list(self._treasury_close)})
+
+
+def recorded_source() -> RecordedSource:
+    """Factory for DCF_MARKET_SOURCE: pinned Treasury unless the env var says otherwise."""
+    raw = os.environ.get(TREASURY_ENV_VAR, "").strip()
+    if not raw:
+        return RecordedSource()
+    if raw == "error":
+        return RecordedSource(ConnectionError("Yahoo unreachable"))
+    if raw == "empty":
+        return RecordedSource([])
+    return RecordedSource([float(x) for x in raw.split(",")])

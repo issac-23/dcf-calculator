@@ -1,15 +1,16 @@
-"""Fetch company fundamentals from Yahoo Finance and pre-compute the
-historical averages we use to seed the DCF inputs.
+"""Turn Yahoo Finance fundamentals into a `CompanyData`, with the historical
+averages we use to seed the DCF inputs.
 
-This module isolates the yfinance dependency so the rest of the app stays
-testable. The `fetch_company_data` function is the one entry point;
-`_extract_*` helpers are pure and individually testable with fixture data.
+This module is pure: `build_company_data` turns anything shaped like a
+yfinance Ticker into a `CompanyData`, and `risk_free_from_history` turns a
+Treasury price history into a rate. Getting those objects from the network
+(or a recording) is dcf/market.py's job.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Callable, List, Optional, Protocol
+from dataclasses import dataclass
+from typing import Optional, Protocol
 
 import pandas as pd
 
@@ -53,33 +54,18 @@ class CompanyData:
     historical_wc_pct: Optional[float]
 
     is_dcf_inappropriate: bool
-    warnings: List[str] = field(default_factory=list)
 
 
-class _TickerLike(Protocol):
-    """The slice of yfinance.Ticker we depend on. Lets tests inject fakes."""
+class Fundamentals(Protocol):
+    """The slice of yfinance.Ticker we depend on: what a market-data source
+    hands back for one symbol (see dcf/market.py)."""
 
     info: dict
     financials: pd.DataFrame
     cashflow: pd.DataFrame
 
 
-def fetch_company_data(ticker: str) -> CompanyData:
-    import yfinance as yf  # imported lazily so tests can run without it
-
-    symbol = ticker.strip().upper()
-    if not symbol:
-        raise DataFetchError("Ticker symbol is empty")
-
-    try:
-        tk = yf.Ticker(symbol)
-    except Exception as e:
-        raise DataFetchError(f"Could not initialize ticker '{symbol}': {e}") from e
-
-    return build_company_data(symbol, tk)
-
-
-def build_company_data(symbol: str, tk: _TickerLike) -> CompanyData:
+def build_company_data(symbol: str, tk: Fundamentals) -> CompanyData:
     """Pure function over a Ticker-like object. Easy to test with a fake."""
     info = _safe_info(tk)
     financials = _safe_frame(tk, "financials")
@@ -115,7 +101,7 @@ def build_company_data(symbol: str, tk: _TickerLike) -> CompanyData:
 
     # Debt Yahoo did not report stays None on the CompanyData -- it is unknown,
     # not zero -- but net_debt has to be a number, so it counts as zero there
-    # and a warning below says so.
+    # and the valuation run reports a DEBT_UNREPORTED caveat.
     total_debt = _coerce_float(info.get("totalDebt"))
     total_cash = _coerce_float(info.get("totalCash"), default=0.0) or 0.0
     net_debt = (total_debt or 0.0) - total_cash
@@ -132,25 +118,7 @@ def build_company_data(symbol: str, tk: _TickerLike) -> CompanyData:
 
     hist = _historical_averages(financials, cashflow)
 
-    warnings: List[str] = []
-    if total_debt is None:
-        warnings.append(
-            "Yahoo did not report total debt for this ticker. Net debt below "
-            "counts it as zero, which overstates equity value if the company "
-            "borrows."
-        )
     is_inappropriate = sector in _DCF_INAPPROPRIATE_SECTORS
-    if is_inappropriate:
-        warnings.append(
-            f"DCF is unreliable for {sector.lower()} companies. "
-            "Banks should be valued using equity DCF or P/B; "
-            "REITs using FFO or NAV."
-        )
-    if hist["operating_margin"] is not None and hist["operating_margin"] < 0:
-        warnings.append(
-            "Historical operating margin is negative. "
-            "The DCF will return a negative fair value unless you adjust margin assumptions."
-        )
 
     return CompanyData(
         ticker=symbol,
@@ -172,56 +140,35 @@ def build_company_data(symbol: str, tk: _TickerLike) -> CompanyData:
         historical_da_pct=hist["da_pct"],
         historical_wc_pct=hist["wc_pct"],
         is_dcf_inappropriate=is_inappropriate,
-        warnings=warnings,
     )
 
-
-# The 10-year Treasury is the conventional risk-free proxy for a US equity
-# DCF: long enough to match the horizon of a perpetuity, liquid enough to
-# trust the quote.
-_RISK_FREE_TICKER = "^TNX"
 
 # Used only when the quote cannot be fetched, so a network hiccup costs the
 # user a current rate rather than the whole derivation.
 FALLBACK_RISK_FREE_RATE = 0.042
 
 
-def fetch_risk_free_rate(history: Optional[Callable[[], pd.DataFrame]] = None) -> tuple[float, bool]:
-    """Return (rate, is_live). ^TNX quotes in percent, so 4.96 means 4.96%.
+def risk_free_from_history(hist: pd.DataFrame) -> tuple[float, bool]:
+    """Return (rate, is_live) from a ^TNX price history.
 
-    Deliberately separate from fetch_company_data: this is one shared market
-    rate rather than a property of the company, and it should be cached and
-    fail on its own. A dead Treasury quote must not take a valuation with it.
-
-    `history` injects the price fetch, the same way `_TickerLike` injects the
-    company fetch. Defaults to the live yfinance call.
+    ^TNX quotes in percent, so a close of 4.96 means 4.96%. Anything that is
+    not a plausible 10-year yield falls back, and says so with is_live=False.
     """
-    try:
-        if history is None:
-
-            def history():  # pragma: no cover - the live network call
-                import yfinance as yf
-
-                return yf.Ticker(_RISK_FREE_TICKER).history(period="5d")
-
-        hist = history()
-        close = hist["Close"].dropna()
-        if close.empty:
-            return FALLBACK_RISK_FREE_RATE, False
-        rate = float(close.iloc[-1]) / 100.0
-        # A 10-year yield outside 0-15% means the feed is wrong, not that the
-        # world changed.
-        if not 0.0 < rate < 0.15:
-            return FALLBACK_RISK_FREE_RATE, False
-        return rate, True
-    except Exception:
+    close = hist["Close"].dropna()
+    if close.empty:
         return FALLBACK_RISK_FREE_RATE, False
+    rate = float(close.iloc[-1]) / 100.0
+    # A 10-year yield outside 0-15% means the feed is wrong, not that the
+    # world changed.
+    if not 0.0 < rate < 0.15:
+        return FALLBACK_RISK_FREE_RATE, False
+    return rate, True
 
 
 # ---- helpers ---------------------------------------------------------------
 
 
-def _safe_info(tk: _TickerLike) -> dict:
+def _safe_info(tk: Fundamentals) -> dict:
     try:
         info = tk.info or {}
         return info if isinstance(info, dict) else {}
@@ -229,7 +176,7 @@ def _safe_info(tk: _TickerLike) -> dict:
         return {}
 
 
-def _safe_frame(tk: _TickerLike, attr: str) -> pd.DataFrame:
+def _safe_frame(tk: Fundamentals, attr: str) -> pd.DataFrame:
     try:
         df = getattr(tk, attr)
         if df is None:
