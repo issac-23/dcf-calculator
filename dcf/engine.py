@@ -17,6 +17,13 @@ from dataclasses import dataclass, field, replace
 from typing import List
 
 
+# The revenue growth the engine accepts, which is also the range the reverse
+# DCF searches: a growth rate the forward model would refuse cannot be an
+# answer to "what growth does the price imply?".
+REVENUE_GROWTH_MIN = -0.5
+REVENUE_GROWTH_MAX = 1.0
+
+
 @dataclass(frozen=True)
 class DCFInputs:
     revenue_base: float
@@ -42,8 +49,11 @@ class DCFInputs:
             raise ValueError("revenue_base must be positive")
         if self.shares_outstanding <= 0:
             raise ValueError("shares_outstanding must be positive")
-        if not -0.5 <= self.revenue_growth <= 1.0:
-            raise ValueError("revenue_growth must be between -50% and 100%")
+        if not REVENUE_GROWTH_MIN <= self.revenue_growth <= REVENUE_GROWTH_MAX:
+            raise ValueError(
+                f"revenue_growth must be between {REVENUE_GROWTH_MIN:.0%} "
+                f"and {REVENUE_GROWTH_MAX:.0%}"
+            )
         if not -1.0 <= self.operating_margin <= 1.0:
             raise ValueError("operating_margin must be between -100% and 100%")
         if not 0.0 <= self.tax_rate <= 0.6:
@@ -158,8 +168,8 @@ def implied_revenue_growth(
     inputs: DCFInputs,
     target_price: float,
     *,
-    lo: float = -0.5,
-    hi: float = 1.0,
+    lo: float = REVENUE_GROWTH_MIN,
+    hi: float = REVENUE_GROWTH_MAX,
     tol: float = 1e-4,
     max_iter: int = 100,
 ) -> float | None:
