@@ -50,6 +50,13 @@ def describe_failure(exc: BaseException) -> str:
     return text
 
 
+def _source_unreachable(symbol: str, what: str, reason: str) -> DataFetchError:
+    return DataFetchError(
+        f"Yahoo Finance didn't answer when fetching {what} for '{symbol}', "
+        f"so this isn't a problem with the ticker. ({reason})"
+    )
+
+
 @dataclass(frozen=True)
 class CompanyData:
     ticker: str
@@ -91,11 +98,17 @@ class Fundamentals(Protocol):
 
 def build_company_data(symbol: str, tk: Fundamentals) -> CompanyData:
     """Pure function over a Ticker-like object. Easy to test with a fake."""
-    info = _safe_info(tk)
-    financials = _safe_frame(tk, "financials")
-    cashflow = _safe_frame(tk, "cashflow")
+    info, info_failure = _safe_info(tk)
+    financials, financials_failure = _safe_frame(tk, "financials")
+    cashflow, _ = _safe_frame(tk, "cashflow")
 
+    # A fetch that raised is the data source failing to answer, which says
+    # nothing about the ticker. Every "this ticker lacks X" error below is
+    # only honest when the fetch for X actually succeeded.
     if not info and financials.empty:
+        failure = info_failure or financials_failure
+        if failure:
+            raise _source_unreachable(symbol, "company data", failure)
         raise DataFetchError(
             f"No data found for '{symbol}'. Check the ticker and try again."
         )
@@ -112,6 +125,8 @@ def build_company_data(symbol: str, tk: Fundamentals) -> CompanyData:
 
     revenue_base = _latest_row(financials, "Total Revenue")
     if revenue_base is None or revenue_base <= 0:
+        if financials_failure:
+            raise _source_unreachable(symbol, "financials", financials_failure)
         raise DataFetchError(
             f"Could not find revenue data for '{symbol}'. "
             "Yahoo may not have financials for this ticker."
@@ -119,6 +134,8 @@ def build_company_data(symbol: str, tk: Fundamentals) -> CompanyData:
 
     shares_outstanding = _coerce_float(info.get("sharesOutstanding"))
     if not shares_outstanding or shares_outstanding <= 0:
+        if info_failure:
+            raise _source_unreachable(symbol, "share data", info_failure)
         raise DataFetchError(
             f"Could not find shares outstanding for '{symbol}'."
         )
@@ -192,22 +209,24 @@ def risk_free_from_history(hist: pd.DataFrame) -> tuple[float, bool]:
 # ---- helpers ---------------------------------------------------------------
 
 
-def _safe_info(tk: Fundamentals) -> dict:
+def _safe_info(tk: Fundamentals) -> tuple[dict, Optional[str]]:
+    """The info dict, plus a sanitised reason if fetching it raised."""
     try:
         info = tk.info or {}
-        return info if isinstance(info, dict) else {}
-    except Exception:
-        return {}
+        return (info if isinstance(info, dict) else {}), None
+    except Exception as e:
+        return {}, describe_failure(e)
 
 
-def _safe_frame(tk: Fundamentals, attr: str) -> pd.DataFrame:
+def _safe_frame(tk: Fundamentals, attr: str) -> tuple[pd.DataFrame, Optional[str]]:
+    """A statement frame, plus a sanitised reason if fetching it raised."""
     try:
         df = getattr(tk, attr)
-        if df is None:
-            return pd.DataFrame()
-        return df if isinstance(df, pd.DataFrame) else pd.DataFrame()
-    except Exception:
-        return pd.DataFrame()
+        if isinstance(df, pd.DataFrame):
+            return df, None
+        return pd.DataFrame(), None
+    except Exception as e:
+        return pd.DataFrame(), describe_failure(e)
 
 
 def _coerce_float(x, default: Optional[float] = None) -> Optional[float]:
