@@ -6,6 +6,7 @@ import pytest
 import streamlit as st
 
 from dcf.market import SOURCE_ENV_VAR
+from tests.offline_guard import network_guard  # noqa: F401  (autouse)
 
 
 @pytest.fixture(autouse=True)
