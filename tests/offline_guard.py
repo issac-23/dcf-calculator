@@ -13,17 +13,42 @@ which never touches Python's socket module:
 * curl_cffi: Session.request and AsyncSession.request, which catches yfinance.
 
 Loopback and unix sockets stay open for Streamlit's AppTest.
+
+If curl_cffi is ever absent (a future yfinance without it), that layer is
+skipped and the socket layer still covers requests and urllib. Known limit:
+code that binds socket functions at import time (`from socket import
+getaddrinfo`) keeps the real function and bypasses the guard.
 """
 
 from __future__ import annotations
 
+import ipaddress
 import socket
 from urllib.parse import urlsplit
 
-import curl_cffi.requests as curl_requests
 import pytest
 
-_LOOPBACK = {"127.0.0.1", "::1", "localhost", "unix"}
+try:
+    import curl_cffi.requests as curl_requests
+except ImportError:
+    curl_requests = None
+
+_UNIX = "unix"  # stands in for AF_UNIX peers, which have no host
+
+
+def _is_local(host: str | None) -> bool:
+    """Loopback in any spelling, the unspecified address, and the empty host."""
+    if host is None:
+        return False
+    if host == "" or host == _UNIX or host.lower() == "localhost":
+        return True
+    try:
+        ip = ipaddress.ip_address(host.split("%")[0])
+    except ValueError:
+        return False  # a real hostname
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
+        ip = ip.ipv4_mapped
+    return ip.is_loopback or ip.is_unspecified
 
 
 class NetworkBlocked(OSError):
@@ -35,7 +60,7 @@ class NetworkGuard:
         self.blocked: list[str] = []
 
     def _check(self, destination: str, host: str | None) -> None:
-        if host in _LOOPBACK:
+        if _is_local(host):
             return
         self.blocked.append(destination)
         raise NetworkBlocked(f"network blocked in tests: {destination}")
@@ -48,8 +73,8 @@ class NetworkGuard:
         def host_of(sock, address):
             # AF_UNIX addresses are paths, not (host, port) tuples.
             if sock.family == getattr(socket, "AF_UNIX", None):
-                return "unix"
-            return address[0] if isinstance(address, tuple) else "unix"
+                return _UNIX
+            return address[0] if isinstance(address, tuple) else _UNIX
 
         def connect(sock, address):
             self._check(f"socket connect {address!r}", host_of(sock, address))
@@ -62,7 +87,7 @@ class NetworkGuard:
         def getaddrinfo(host, *args, **kwargs):
             if isinstance(host, bytes):
                 host = host.decode()
-            if host is not None:  # passive lookups for bind/listen
+            if host is not None:  # None and "" are passive/local lookups
                 self._check(f"dns lookup {host!r}", host)
             return real_getaddrinfo(host, *args, **kwargs)
 
@@ -77,6 +102,8 @@ class NetworkGuard:
 
             return request
 
+        if curl_requests is None:
+            return
         for cls in (curl_requests.Session, curl_requests.AsyncSession):
             monkeypatch.setattr(cls, "request", guarded_request(cls.request))
 

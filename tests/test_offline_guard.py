@@ -6,6 +6,7 @@ means the guard stopped them, not that the connection happened to fail.
 
 from __future__ import annotations
 
+import socket
 import urllib.request
 from pathlib import Path
 
@@ -33,6 +34,25 @@ def test_yfinance_is_recorded(network_guard):
 
     assert network_guard.blocked, "yfinance got past the guard"
     assert any("yahoo" in attempt for attempt in network_guard.blocked)
+    network_guard.blocked.clear()
+
+
+def test_loopback_is_not_recorded(network_guard):
+    with socket.socket() as server:
+        server.bind(("127.0.0.1", 0))
+        server.listen()
+        with socket.create_connection(server.getsockname(), timeout=5):
+            pass
+    for host in ("localhost", "LocalHost", "127.0.0.2", "::1", "::ffff:127.0.0.1", "0.0.0.0", ""):
+        socket.getaddrinfo(host, 80)
+
+    assert network_guard.blocked == []
+
+
+def test_non_ip_hostnames_stay_blocked(network_guard):
+    with pytest.raises(OSError):
+        socket.getaddrinfo("localhost.example.com", 80)
+    assert network_guard.blocked
     network_guard.blocked.clear()
 
 
