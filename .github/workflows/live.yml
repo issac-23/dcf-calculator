@@ -10,9 +10,13 @@ on:
   # manual way to run it.
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   live:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -28,4 +32,6 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Run live checks
-        run: pytest -m live -v
+        # One retry after a minute, so a single Yahoo blip does not turn the
+        # daily run red.
+        run: pytest -m live -v || (sleep 60 && pytest -m live -v)
