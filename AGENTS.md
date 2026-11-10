@@ -75,6 +75,17 @@ Tests that really must talk to Yahoo carry `@pytest.mark.live` and are exempt.
 Plain `pytest` skips them (`addopts = -m "not live"` in `pytest.ini`); a
 command-line `-m` replaces that, so `pytest -m live` runs only the live ones.
 
+A scheduled workflow, `.github/workflows/live.yml`, runs `pytest -m live` every
+day against the real Yahoo from a GitHub runner, which is a datacenter IP like
+Streamlit Cloud. It exists because Yahoo once stopped answering `.info` to
+datacenter IPs while financials kept working, and the app was broken for weeks
+behind a green suite. A red run there means Yahoo or the deploy broke, not the
+code: check the live app at https://dcf-calculator-issac.streamlit.app before
+touching anything. The failure message says which of `.info`, `.financials` and
+`.cashflow` came back empty. GitHub pauses schedules on a repo with no activity
+for 60 days; start it by hand from the Actions tab (`workflow_dispatch`) if
+that happens. Locally, `pytest -m live`.
+
 ## Code
 
 - `dcf/` is pure Python with no Streamlit and no I/O beyond `dcf/data.py`.
