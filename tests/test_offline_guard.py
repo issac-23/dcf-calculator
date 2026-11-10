@@ -44,7 +44,10 @@ def test_loopback_is_not_recorded(network_guard):
         with socket.create_connection(server.getsockname(), timeout=5):
             pass
     for host in ("localhost", "LocalHost", "127.0.0.2", "::1", "::ffff:127.0.0.1", "0.0.0.0", ""):
-        socket.getaddrinfo(host, 80)
+        try:
+            socket.getaddrinfo(host, 80)
+        except OSError:
+            pass  # the real resolver may not know a spelling; only the record matters
 
     assert network_guard.blocked == []
 
