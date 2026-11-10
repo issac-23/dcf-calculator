@@ -11,6 +11,7 @@ from dcf.data import (
     CompanyData,
     DataFetchError,
     build_company_data,
+    describe_failure,
 )
 
 
@@ -165,10 +166,25 @@ def test_the_user_never_sees_the_crumb_or_cookie_in_a_source_failure():
     assert "RuntimeError" in message and "401 Client Error" in message
 
 
+def test_json_quoted_secrets_and_whole_cookie_headers_are_removed():
+    body = describe_failure(
+        RuntimeError(
+            'body {"crumb": "SECRET1"} Cookie: A3=d=SECRET2; B=SECRET3'
+        )
+    )
+    assert "SECRET" not in body
+    assert body.startswith("RuntimeError: body")
+
+
+def test_a_question_mark_outside_a_url_is_kept():
+    assert "why? because" in describe_failure(ValueError("why? because"))
+
+
 def test_a_long_exception_message_is_capped():
     refusing = RefusingTicker(ValueError("x" * 1000))
     with pytest.raises(DataFetchError) as excinfo:
         build_company_data("TEST", refusing)
+    assert len(describe_failure(ValueError("x" * 1000))) <= 200
     assert len(str(excinfo.value)) < 400
 
 

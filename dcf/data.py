@@ -27,9 +27,14 @@ class DataFetchError(Exception):
     """Raised when we can't pull the bare-minimum fields for a ticker."""
 
 
-_QUERY_STRING = re.compile(r"\?[^\s'\")>\]]*")
+# Only a URL's query string goes; a '?' elsewhere in the message is just prose.
+_URL_QUERY = re.compile(r"(https?://[^\s?'\"]+)\?[^\s'\")>\]]*")
+# A cookie header carries several pairs, so drop the rest of the line.
+_COOKIE_HEADER = re.compile(r"\b(set-cookie|cookie)\s*:[^\r\n]*", re.IGNORECASE)
+# key=value, key: value and JSON-style "key": "value", quoted or not.
 _SECRET_PAIR = re.compile(
-    r"\b(crumb|cookie|set-cookie|session|token|csrf|a1|a3)\b\s*[=:]\s*[^\s;&,'\")]+",
+    r"[\"']?\b(crumb|cookie|session|token|csrf|a1|a3)\b[\"']?\s*[=:]\s*"
+    r"(?:\"[^\"]*\"|'[^']*'|[^\s;&,'\"})]+)",
     re.IGNORECASE,
 )
 _MAX_REASON_CHARS = 200
@@ -42,7 +47,8 @@ def describe_failure(exc: BaseException) -> str:
     yfinance puts the full request URL in some errors, and the crumb and
     cookie ride along in it.
     """
-    message = _QUERY_STRING.sub("", str(exc))
+    message = _URL_QUERY.sub(r"\1", str(exc))
+    message = _COOKIE_HEADER.sub(r"\1: [removed]", message)
     message = _SECRET_PAIR.sub(r"\1=[removed]", message)
     text = f"{type(exc).__name__}: {message}".strip().rstrip(":")
     if len(text) > _MAX_REASON_CHARS:
