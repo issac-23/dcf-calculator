@@ -61,10 +61,19 @@ load-bearing one — it checks the engine against a hand-computed textbook
 answer, which is an oracle the E2E suite cannot provide, because the E2E suite
 only knows what this code produces.
 
-**Tests never touch the network.** `tests/e2e/record.py` is the sole exception
-and pytest never runs it. If a test run gets slower for no reason, something
-started reaching for Yahoo — that has happened before and it cost 30 seconds a
-run while failing silently.
+**Tests never touch the network, and a guard enforces it.** An autouse fixture
+in `tests/conftest.py` (built in `tests/offline_guard.py`) blocks everything
+except loopback and unix sockets. It patches Python's sockets and also
+curl_cffi's `Session.request`, because yfinance goes through libcurl and never
+touches the socket module. `dcf/data.py` swallows exceptions, so the guard
+records every blocked attempt and fails the test at teardown naming the host,
+whether or not the error surfaced. If a test goes red with "tried to reach the
+network", something is reaching for Yahoo; fix that instead of loosening the
+guard. `tests/e2e/record.py` is the sole exception and pytest never runs it.
+
+Tests that really must talk to Yahoo carry `@pytest.mark.live` and are exempt.
+Plain `pytest` skips them (`addopts = -m "not live"` in `pytest.ini`); a
+command-line `-m` replaces that, so `pytest -m live` runs only the live ones.
 
 ## Code
 
