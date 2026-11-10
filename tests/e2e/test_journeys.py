@@ -11,8 +11,8 @@ the paths that question can take are: it works (once with a tidy ticker, once
 typed the way people type it), it works but the answer is absurd, the reverse
 solve has no answer, the company is the wrong shape for the model, the data
 isn't there (or Yahoo refuses to hand it over), or the Treasury quote behind
-every WACC is dead. That is seven journeys, and they are these seven. The
-eighth and last test pins the numbers.
+every WACC is dead. That is eight journeys, and they are these eight. The
+ninth and last test pins the numbers.
 
 The fixtures are real recordings, so these tests know real things — that
 Apple's beta is near 1.1 and J&J's near 0.2, that Karuna stopped reporting

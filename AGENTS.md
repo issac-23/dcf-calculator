@@ -6,7 +6,7 @@ Notes for anyone — human or agent — writing code here.
 
 **Prefer end-to-end tests. They are the default, not the fallback.**
 
-`tests/e2e/` holds seven journey tests, plus the snapshot test below. Between
+`tests/e2e/` holds eight journey tests, plus the snapshot test below. Between
 them they cover every path a person can take through this app: a valuation
 that works, the same one with the ticker typed sloppily, one that works but
 produces an absurd number, a reverse solve with no answer, a company that is
@@ -16,8 +16,8 @@ the real Load button. Each starts at a recorded Yahoo Finance payload and
 ends at a rendered Streamlit page or a fair value per share, with nothing
 stubbed in between except the network call itself.
 
-When you add a feature, the question to answer first is which of those seven
-journeys changes, or whether you have created an eighth. Adding one is a real
+When you add a feature, the question to answer first is which of those eight
+journeys changes, or whether you have created a ninth. Adding one is a real
 decision — this is close to the ceiling for a tool that asks one question.
 
 **Every E2E run produces a reviewable artifact.**
