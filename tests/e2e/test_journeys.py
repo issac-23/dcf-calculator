@@ -10,9 +10,9 @@ question ("what does this company come out worth, and do I believe it?"), and
 the paths that question can take are: it works (once with a tidy ticker, once
 typed the way people type it), it works but the answer is absurd, the reverse
 solve has no answer, the company is the wrong shape for the model, the data
-isn't there, or the Treasury quote behind every WACC is dead. That is seven
-journeys, and they are these seven. The eighth and last test pins the
-numbers.
+isn't there (or Yahoo refuses to hand it over), or the Treasury quote behind
+every WACC is dead. That is seven journeys, and they are these seven. The
+eighth and last test pins the numbers.
 
 The fixtures are real recordings, so these tests know real things — that
 Apple's beta is near 1.1 and J&J's near 0.2, that Karuna stopped reporting
@@ -259,6 +259,27 @@ def test_a_delisted_company_fails_with_a_message_a_human_can_act_on():
 
     errors = " ".join(e.value for e in at.error)
     assert "KRTX" in errors and "revenue" in errors.lower()
+    assert at.session_state["company"] is None
+    assert any("Enter a ticker" in i.value for i in at.info)
+
+
+def test_yahoo_refusing_company_info_says_so_instead_of_blaming_the_ticker(monkeypatch):
+    """On a blocked datacenter IP the statements load and `.info` is refused.
+
+    The old app reported that it could not find shares outstanding for AAPL,
+    which sent people off to check a ticker that was fine. The screen has to
+    name the source and carry the real exception, minus the crumb and cookie
+    that ride along in the request URL.
+    """
+    monkeypatch.setenv(replay.INFO_REFUSED_ENV_VAR, "1")
+
+    at = load_via_the_button("AAPL")
+
+    errors = " ".join(e.value for e in at.error)
+    assert "Yahoo Finance didn't answer" in errors
+    assert "RuntimeError" in errors and "401 Client Error" in errors
+    assert "shares outstanding" not in errors
+    assert "abc123" not in errors and "xyz" not in errors
     assert at.session_state["company"] is None
     assert any("Enter a ticker" in i.value for i in at.info)
 

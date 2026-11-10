@@ -10,11 +10,11 @@ Notes for anyone — human or agent — writing code here.
 them they cover every path a person can take through this app: a valuation
 that works, the same one with the ticker typed sloppily, one that works but
 produces an absurd number, a reverse solve with no answer, a company that is
-the wrong shape for the model, data that isn't there, and a Treasury quote
-that is dead. Every journey loads through the real Load button. Each starts at
-a recorded Yahoo Finance payload and ends at a rendered Streamlit page or a
-fair value per share, with nothing stubbed in between except the network
-call itself.
+the wrong shape for the model, data that isn't there (or that Yahoo refuses
+to hand over), and a Treasury quote that is dead. Every journey loads through
+the real Load button. Each starts at a recorded Yahoo Finance payload and
+ends at a rendered Streamlit page or a fair value per share, with nothing
+stubbed in between except the network call itself.
 
 When you add a feature, the question to answer first is which of those seven
 journeys changes, or whether you have created an eighth. Adding one is a real
