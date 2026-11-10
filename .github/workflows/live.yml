@@ -1,0 +1,31 @@
+name: live
+
+# Hits the real Yahoo Finance from a GitHub runner (a datacenter IP, like
+# Streamlit Cloud). tests.yml cannot see this: it is offline and only runs on
+# push and PR. Red here means Yahoo or the deploy, not necessarily the code.
+on:
+  schedule:
+    - cron: '17 13 * * *'
+  # Schedules are disabled after 60 days without repo activity; this is the
+  # manual way to run it.
+  workflow_dispatch:
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run live checks
+        run: pytest -m live -v
