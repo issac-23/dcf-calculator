@@ -62,13 +62,13 @@ class RecordedTicker:
         self.cashflow: pd.DataFrame = frame_from_json(payload["cashflow"])
 
 
-def load(symbol: str) -> RecordedTicker:
+def load(symbol: str, ticker_class: type[RecordedTicker] = RecordedTicker) -> RecordedTicker:
     path = FIXTURES / f"{symbol.upper()}.json"
     if not path.exists():
         raise FileNotFoundError(
             f"No recording for {symbol}. Run: python tests/e2e/record.py {symbol}"
         )
-    return RecordedTicker(json.loads(path.read_text(encoding="utf-8")))
+    return ticker_class(json.loads(path.read_text(encoding="utf-8")))
 
 
 def available() -> List[str]:
@@ -87,13 +87,44 @@ PINNED_TREASURY_CLOSE = (5.18,)
 TREASURY_ENV_VAR = "E2E_TREASURY_CLOSE"
 
 
+# A journey that wants Yahoo to refuse the company-info request sets this to
+# anything non-empty. The statements still load from the recording, which is
+# the shape of a datacenter IP that Yahoo blocks for `.info` only.
+INFO_REFUSED_ENV_VAR = "E2E_INFO_REFUSED"
+
+INFO_REFUSAL = RuntimeError(
+    "401 Client Error: Unauthorized for url: "
+    "https://query2.finance.yahoo.com/v10/finance/quoteSummary/AAPL"
+    "?crumb=abc123&cookie=xyz"
+)
+
+
+class RefusedInfoTicker(RecordedTicker):
+    """A recorded ticker whose `.info` raises while the statements load."""
+
+    @property
+    def info(self) -> Dict[str, Any]:
+        raise INFO_REFUSAL
+
+    @info.setter
+    def info(self, value: Dict[str, Any]) -> None:
+        pass
+
+
 class RecordedSource:
     """The recorded `dcf.market.MarketDataSource`: no network, ever."""
 
-    def __init__(self, treasury_close: Sequence[float] | Exception = PINNED_TREASURY_CLOSE):
+    def __init__(
+        self,
+        treasury_close: Sequence[float] | Exception = PINNED_TREASURY_CLOSE,
+        info_refused: bool = False,
+    ):
         self._treasury_close = treasury_close
+        self._info_refused = info_refused
 
     def ticker(self, symbol: str) -> RecordedTicker:
+        if self._info_refused:
+            return load(symbol, RefusedInfoTicker)
         return load(symbol)
 
     def treasury_history(self) -> pd.DataFrame:
@@ -104,9 +135,10 @@ class RecordedSource:
 
 def recorded_source() -> RecordedSource:
     """Factory for DCF_MARKET_SOURCE: pinned Treasury unless the env var says otherwise."""
+    refused = bool(os.environ.get(INFO_REFUSED_ENV_VAR, "").strip())
     raw = os.environ.get(TREASURY_ENV_VAR, "").strip()
     if not raw:
-        return RecordedSource()
+        return RecordedSource(info_refused=refused)
     if raw == "error":
         return RecordedSource(ConnectionError("Yahoo unreachable"))
     if raw == "empty":

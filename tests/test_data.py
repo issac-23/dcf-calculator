@@ -11,6 +11,7 @@ from dcf.data import (
     CompanyData,
     DataFetchError,
     build_company_data,
+    describe_failure,
 )
 
 
@@ -21,6 +22,22 @@ class FakeTicker:
         self.info = info or {}
         self.financials = financials if financials is not None else pd.DataFrame()
         self.cashflow = cashflow if cashflow is not None else pd.DataFrame()
+
+
+class RefusingTicker(FakeTicker):
+    """A source that raises on `.info`, the way Yahoo does for a blocked IP."""
+
+    def __init__(self, error, **kwargs):
+        super().__init__(**kwargs)
+        self._error = error
+
+    @property
+    def info(self):
+        raise self._error
+
+    @info.setter
+    def info(self, value):
+        pass
 
 
 def _years(*ys):
@@ -109,6 +126,76 @@ def test_missing_shares_outstanding_raises():
     fix.info.pop("sharesOutstanding")
     with pytest.raises(DataFetchError, match="shares"):
         build_company_data("TEST", fix)
+
+
+# Source failures versus missing data:
+#   1. .info raises but the statements load: the error blames the source,
+#      not the ticker.
+#   2. The exception text carries a request URL with crumb/cookie values: none
+#      of that reaches the user.
+#   3. The fetch succeeds and the field is simply absent: that is still the
+#      ticker's problem and keeps its own message.
+
+
+def test_a_refused_info_fetch_blames_the_source_not_the_ticker():
+    fix = _full_fixture()
+    refusing = RefusingTicker(
+        ConnectionError("Too Many Requests"),
+        financials=fix.financials,
+        cashflow=fix.cashflow,
+    )
+    with pytest.raises(DataFetchError) as excinfo:
+        build_company_data("TEST", refusing)
+    message = str(excinfo.value)
+    assert "Yahoo Finance didn't answer" in message
+    assert "ConnectionError: Too Many Requests" in message
+    assert "Could not find shares outstanding" not in message
+
+
+def test_the_user_never_sees_the_crumb_or_cookie_in_a_source_failure():
+    fix = _full_fixture()
+    leaky = RuntimeError(
+        "401 Client Error for url: "
+        "https://query2.finance.yahoo.com/v10/quoteSummary/TEST?crumb=abc123&cookie=xyz"
+    )
+    refusing = RefusingTicker(leaky, financials=fix.financials, cashflow=fix.cashflow)
+    with pytest.raises(DataFetchError) as excinfo:
+        build_company_data("TEST", refusing)
+    message = str(excinfo.value)
+    assert "abc123" not in message and "xyz" not in message
+    assert "RuntimeError" in message and "401 Client Error" in message
+
+
+def test_json_quoted_secrets_and_whole_cookie_headers_are_removed():
+    body = describe_failure(
+        RuntimeError(
+            'body {"crumb": "SECRET1"} Cookie: A3=d=SECRET2; B=SECRET3'
+        )
+    )
+    assert "SECRET" not in body
+    assert body.startswith("RuntimeError: body")
+
+
+def test_a_question_mark_outside_a_url_is_kept():
+    assert "why? because" in describe_failure(ValueError("why? because"))
+
+
+def test_a_long_exception_message_is_capped():
+    refusing = RefusingTicker(ValueError("x" * 1000))
+    with pytest.raises(DataFetchError) as excinfo:
+        build_company_data("TEST", refusing)
+    assert len(describe_failure(ValueError("x" * 1000))) <= 200
+    assert len(str(excinfo.value)) < 400
+
+
+def test_absent_shares_with_a_working_fetch_still_blames_the_ticker():
+    fix = _full_fixture()
+    fix.info.pop("sharesOutstanding")
+    with pytest.raises(DataFetchError) as excinfo:
+        build_company_data("TEST", fix)
+    message = str(excinfo.value)
+    assert "Could not find shares outstanding for 'TEST'" in message
+    assert "didn't answer" not in message
 
 
 def test_completely_empty_data_raises():

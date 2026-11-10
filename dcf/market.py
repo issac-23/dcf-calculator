@@ -30,6 +30,7 @@ from dcf.data import (
     Fundamentals,
     FALLBACK_RISK_FREE_RATE,
     build_company_data,
+    describe_failure,
     risk_free_from_history,
 )
 
@@ -90,7 +91,9 @@ def fetch_company_data(source: MarketDataSource, ticker: str) -> CompanyData:
     try:
         tk = source.ticker(symbol)
     except Exception as e:
-        raise DataFetchError(f"Could not initialize ticker '{symbol}': {e}") from e
+        raise DataFetchError(
+            f"Could not initialize ticker '{symbol}': {describe_failure(e)}"
+        ) from e
 
     return build_company_data(symbol, tk)
 
