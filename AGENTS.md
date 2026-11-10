@@ -86,6 +86,14 @@ touching anything. The failure message says which of `.info`, `.financials` and
 for 60 days; start it by hand from the Actions tab (`workflow_dispatch`) if
 that happens. Locally, `pytest -m live`.
 
+Deploys: Streamlit Cloud redeploys on every push to main by rerunning `app.py`,
+but it can keep the `dcf/` modules it already imported. A push where `app.py`
+imports a new name from `dcf/` therefore crashed the live app with an
+ImportError until it was rebooted (this happened on 2026-11-10 when
+`describe_failure` was added). After merging a change like that, open
+https://dcf-calculator-issac.streamlit.app and, if it shows an ImportError,
+reboot it from Manage app, then Reboot.
+
 ## Code
 
 - `dcf/` is pure Python with no Streamlit and no I/O beyond `dcf/data.py`.
