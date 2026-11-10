@@ -9,6 +9,7 @@ Treasury price history into a rate. Getting those objects from the network
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Optional, Protocol
 
@@ -24,6 +25,29 @@ _DCF_INAPPROPRIATE_SECTORS = {
 
 class DataFetchError(Exception):
     """Raised when we can't pull the bare-minimum fields for a ticker."""
+
+
+_QUERY_STRING = re.compile(r"\?[^\s'\")>\]]*")
+_SECRET_PAIR = re.compile(
+    r"\b(crumb|cookie|set-cookie|session|token|csrf|a1|a3)\b\s*[=:]\s*[^\s;&,'\")]+",
+    re.IGNORECASE,
+)
+_MAX_REASON_CHARS = 200
+
+
+def describe_failure(exc: BaseException) -> str:
+    """The exception as a user can safely see it: type and message, with URL
+    query strings and cookie/crumb values removed, capped in length.
+
+    yfinance puts the full request URL in some errors, and the crumb and
+    cookie ride along in it.
+    """
+    message = _QUERY_STRING.sub("", str(exc))
+    message = _SECRET_PAIR.sub(r"\1=[removed]", message)
+    text = f"{type(exc).__name__}: {message}".strip().rstrip(":")
+    if len(text) > _MAX_REASON_CHARS:
+        text = text[: _MAX_REASON_CHARS - 3] + "..."
+    return text
 
 
 @dataclass(frozen=True)
