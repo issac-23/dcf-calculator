@@ -8,7 +8,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from dcf.assumptions import ASSUMPTIONS, seed_inputs, seeded_wacc_pct
-from dcf.data import CompanyData, DataFetchError
+from dcf.data import CompanyData, DataFetchError, describe_failure
 from dcf.market import (
     fetch_company_data,
     fetch_risk_free_rate,
@@ -146,7 +146,7 @@ if load_clicked and ticker_input:
         st.error(str(e))
     except Exception as e:
         st.session_state.company = None
-        st.error(f"Unexpected error fetching {ticker_input}: {e}")
+        st.error(f"Unexpected error fetching {ticker_input}: {describe_failure(e)}")
 
 company: CompanyData | None = st.session_state.company
 
