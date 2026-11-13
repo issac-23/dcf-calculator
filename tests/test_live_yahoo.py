@@ -15,14 +15,14 @@ from dcf.market import YahooSource
 
 
 def _probe(tk) -> str:
-    """Say which of the three yfinance attributes failed or came back empty.
+    """Say which of the yfinance attributes failed or came back empty.
 
     dcf/data.py swallows these errors, so an exception from the build alone
     often cannot tell you which endpoint went dark. yfinance caches each one
     on the Ticker, so this reads the same responses the build then uses.
     """
     lines = []
-    for attr in ("info", "financials", "cashflow"):
+    for attr in ("info", "financials", "cashflow", "balance_sheet"):
         try:
             value = getattr(tk, attr)
             size = len(value) if hasattr(value, "__len__") else "?"
@@ -40,6 +40,14 @@ def test_yahoo_serves_company_data():
         data = build_company_data("AAPL", tk)
     except Exception as e:
         pytest.fail(f"build_company_data(AAPL) raised {describe_failure(e)}\n{probe}")
+
+    # The app survives a dead `.info` by reading shares, debt and cash from
+    # the balance sheet. That keeps users served, but this test exists to say
+    # Yahoo is refusing `.info`, so a fallback is a failure here.
+    assert data.quote_fallback is None, (
+        f"Yahoo's company info did not answer ({data.quote_fallback}); the "
+        f"app is running on its balance-sheet fallback\n{probe}"
+    )
 
     for field in ("shares_outstanding", "revenue_base", "current_price"):
         value = getattr(data, field)
