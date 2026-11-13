@@ -280,3 +280,95 @@ def test_negative_interest_expense_is_normalised_to_a_cost():
     tk.financials.loc["Interest Expense"] = -2_400
     d = build_company_data("TEST", tk)
     assert d.interest_expense == 2_400
+
+
+# ----- the balance-sheet fallback ---------------------------------------------
+# Failure modes (also in the PR body): the share row falling back from
+# "Ordinary Shares Number" to "Share Issued"; debt missing reading as zero
+# instead of unknown; cash taking the wrong row or none; a price history that
+# raises or is empty taking the valuation down. The journeys run one recording,
+# so these label lookups can only be reached here.
+
+
+def _statements_only(balance_sheet, history=None):
+    """A ticker whose `.info` is the near-empty dict yfinance can return."""
+    fix = _full_fixture()
+    fix.info = {"trailingPegRatio": None}
+    fix.balance_sheet = balance_sheet
+    if isinstance(history, Exception):
+        def broken(period):
+            raise history
+        fix.history = broken
+    else:
+        usable = pd.DataFrame({"Close": [100.0]}) if history is None else history
+        fix.history = lambda period: usable
+    return fix
+
+
+def _bs(**rows):
+    col = pd.Timestamp("2024-12-31")
+    return pd.DataFrame({col: list(rows.values())}, index=[k.replace("_", " ") for k in rows])
+
+
+def test_shares_fall_back_to_share_issued_and_debt_and_cash_stay_honest():
+    fix = _statements_only(
+        _bs(Share_Issued=900.0, Cash_Cash_Equivalents_And_Short_Term_Investments=70.0)
+    )
+    data = build_company_data("TEST", fix)
+    assert data.shares_outstanding == 900.0
+    assert data.total_debt is None, "unreported debt is unknown, not zero"
+    assert data.net_debt == -70.0
+
+
+def test_cash_prefers_the_plain_cash_row_and_ordinary_shares_win():
+    fix = _statements_only(
+        _bs(
+            Ordinary_Shares_Number=800.0,
+            Share_Issued=900.0,
+            Total_Debt=100.0,
+            Cash_And_Cash_Equivalents=30.0,
+            Cash_Cash_Equivalents_And_Short_Term_Investments=70.0,
+        )
+    )
+    data = build_company_data("TEST", fix)
+    assert data.shares_outstanding == 800.0
+    assert data.net_debt == 70.0
+
+
+@pytest.mark.parametrize(
+    "history",
+    [RuntimeError("boom"), pd.DataFrame({"Close": [float("nan")]}), pd.DataFrame()],
+    ids=["raises", "all-nan", "empty"],
+)
+def test_a_dead_price_history_means_no_valuation_not_a_price_of_zero(history):
+    fix = _statements_only(_bs(Ordinary_Shares_Number=800.0), history)
+    with pytest.raises(DataFetchError) as excinfo:
+        build_company_data("TEST", fix)
+    message = str(excinfo.value)
+    assert "no quote or price for 'TEST'" in message
+    assert "delisted" in message and "may not have answered" in message
+
+
+def test_a_dead_price_history_after_a_raised_info_blames_the_source():
+    fix = _statements_only(_bs(Ordinary_Shares_Number=800.0), pd.DataFrame())
+    refusing = RefusingTicker(RuntimeError("401 Client Error"))
+    refusing.financials = fix.financials
+    refusing.cashflow = fix.cashflow
+    refusing.balance_sheet = fix.balance_sheet
+    refusing.history = fix.history
+    with pytest.raises(DataFetchError) as excinfo:
+        build_company_data("TEST", refusing)
+    message = str(excinfo.value)
+    assert "Yahoo Finance didn't answer when fetching price data" in message
+    assert "401 Client Error" in message
+
+
+def test_partial_info_without_shares_takes_them_from_the_balance_sheet():
+    fix = _full_fixture()
+    fix.info.pop("sharesOutstanding")
+    fix.balance_sheet = _bs(Ordinary_Shares_Number=800.0)
+    data = build_company_data("TEST", fix)
+    assert data.shares_outstanding == 800.0
+    assert data.current_price == 150.0, "the price stays Yahoo's"
+    assert data.name == "Test Co." and data.beta == 1.2
+    assert data.shares_fallback and data.quote_fallback is None

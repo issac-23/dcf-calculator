@@ -44,7 +44,8 @@ _RISK_FREE_TICKER = "^TNX"
 
 class MarketDataSource(Protocol):
     def ticker(self, symbol: str) -> Fundamentals:
-        """Fundamentals for one symbol (info, financials, cashflow)."""
+        """Fundamentals for one symbol (info, financials, cashflow, and the
+        balance sheet and price history used when `.info` does not answer)."""
 
     def treasury_history(self) -> pd.DataFrame:
         """Recent 10-year Treasury quotes: a frame with a "Close" column,

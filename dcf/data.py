@@ -92,6 +92,16 @@ class CompanyData:
 
     is_dcf_inappropriate: bool
 
+    # Set when Yahoo's company-info request did not answer and the statements
+    # stood in for it: shares, debt and cash from the balance sheet, the price
+    # from the last close. Holds the sanitised reason. Name, sector and beta
+    # are unavailable in that case.
+    quote_fallback: Optional[str] = None
+
+    # Set when `.info` answered but had no share count, and the balance sheet
+    # supplied it. Only the share count differs; the price is still Yahoo's.
+    shares_fallback: Optional[str] = None
+
 
 class Fundamentals(Protocol):
     """The slice of yfinance.Ticker we depend on: what a market-data source
@@ -100,6 +110,11 @@ class Fundamentals(Protocol):
     info: dict
     financials: pd.DataFrame
     cashflow: pd.DataFrame
+    # Only read when `.info` did not answer (see build_company_data).
+    balance_sheet: pd.DataFrame
+
+    def history(self, period: str) -> pd.DataFrame:
+        """Recent daily prices: a frame with a "Close" column."""
 
 
 def build_company_data(symbol: str, tk: Fundamentals) -> CompanyData:
@@ -107,6 +122,15 @@ def build_company_data(symbol: str, tk: Fundamentals) -> CompanyData:
     info, info_failure = _safe_info(tk)
     financials, financials_failure = _safe_frame(tk, "financials")
     cashflow, _ = _safe_frame(tk, "cashflow")
+
+    # `.info` that raised, or that came back without a name, price or share
+    # count, is the source not answering. That is only worth working around
+    # when the statements did load: a delisted ticker has the same near-empty
+    # `.info` and no statements, and has to keep failing as "not found".
+    quote_fallback: Optional[str] = None
+    if not financials.empty and not _has_quote_fields(info):
+        quote_fallback = info_failure or _EMPTY_INFO_REASON
+        info = {}
 
     # A fetch that raised is the data source failing to answer, which says
     # nothing about the ticker. Every "this ticker lacks X" error below is
@@ -138,34 +162,50 @@ def build_company_data(symbol: str, tk: Fundamentals) -> CompanyData:
             "Yahoo may not have financials for this ticker."
         )
 
-    shares_outstanding = _coerce_float(info.get("sharesOutstanding"))
-    if not shares_outstanding or shares_outstanding <= 0:
-        if info_failure:
-            raise _source_unreachable(symbol, "share data", info_failure)
-        raise DataFetchError(
-            f"Could not find shares outstanding for '{symbol}'."
-        )
+    # Where shares, price, debt and cash come from. `.info` is the first
+    # choice; the statements stand in when it did not answer (everything), or
+    # when it answered but had no share count (shares only).
+    shares_fallback: Optional[str] = None
+    if quote_fallback:
+        balance_sheet, _ = _safe_frame(tk, "balance_sheet")
+        shares_outstanding = _balance_sheet_shares(balance_sheet)
+        if not shares_outstanding:
+            raise _source_unreachable(symbol, "share data", quote_fallback)
+        # A delisted ticker can still have statements, and valuing it at a
+        # price of zero would be a confident answer built on nothing.
+        current_price = _last_close(tk)
+        if current_price is None:
+            if info_failure:
+                raise _source_unreachable(symbol, "price data", quote_fallback)
+            raise DataFetchError(
+                f"Yahoo returned no quote or price for '{symbol}': it may be "
+                "delisted, or Yahoo may not have answered."
+            )
+        total_debt = _latest_row(balance_sheet, "Total Debt")
+        total_cash = _latest_row(balance_sheet, "Cash And Cash Equivalents")
+        if total_cash is None:
+            total_cash = _latest_row(
+                balance_sheet, "Cash Cash Equivalents And Short Term Investments"
+            )
+    else:
+        shares_outstanding = _coerce_float(info.get("sharesOutstanding"))
+        if not shares_outstanding or shares_outstanding <= 0:
+            balance_sheet, _ = _safe_frame(tk, "balance_sheet")
+            shares_outstanding = _balance_sheet_shares(balance_sheet)
+            if not shares_outstanding:
+                raise DataFetchError(
+                    f"Could not find shares outstanding for '{symbol}'."
+                )
+            shares_fallback = _NO_SHARES_REASON
+        # Debt Yahoo did not report stays None on the CompanyData -- it is
+        # unknown, not zero -- but net_debt has to be a number, so it counts
+        # as zero there and the valuation run reports a DEBT_UNREPORTED caveat.
+        total_debt = _coerce_float(info.get("totalDebt"))
+        total_cash = _coerce_float(info.get("totalCash"), default=0.0)
 
-    # Debt Yahoo did not report stays None on the CompanyData -- it is unknown,
-    # not zero -- but net_debt has to be a number, so it counts as zero there
-    # and the valuation run reports a DEBT_UNREPORTED caveat.
-    total_debt = _coerce_float(info.get("totalDebt"))
-    total_cash = _coerce_float(info.get("totalCash"), default=0.0) or 0.0
-    net_debt = (total_debt or 0.0) - total_cash
-
-    # "Interest Expense" is the headline line; the non-operating variant is
-    # the fallback because some filings only break it out that way.
-    interest_expense = _latest_row(financials, "Interest Expense")
-    if interest_expense is None:
-        interest_expense = _latest_row(financials, "Interest Expense Non Operating")
-    if interest_expense is not None:
-        # Reported as a positive cost on the income statement, but flip a
-        # negative just in case, since yfinance is inconsistent about signs.
-        interest_expense = abs(interest_expense)
+    net_debt = (total_debt or 0.0) - (total_cash or 0.0)
 
     hist = _historical_averages(financials, cashflow)
-
-    is_inappropriate = sector in _DCF_INAPPROPRIATE_SECTORS
 
     return CompanyData(
         ticker=symbol,
@@ -179,14 +219,16 @@ def build_company_data(symbol: str, tk: Fundamentals) -> CompanyData:
         beta=_coerce_float(info.get("beta")),
         market_cap=_coerce_float(info.get("marketCap")),
         total_debt=total_debt,
-        interest_expense=interest_expense,
+        interest_expense=_interest_expense(financials),
         historical_revenue_growth=hist["revenue_growth"],
         historical_operating_margin=hist["operating_margin"],
         historical_tax_rate=hist["tax_rate"],
         historical_capex_pct=hist["capex_pct"],
         historical_da_pct=hist["da_pct"],
         historical_wc_pct=hist["wc_pct"],
-        is_dcf_inappropriate=is_inappropriate,
+        is_dcf_inappropriate=sector in _DCF_INAPPROPRIATE_SECTORS,
+        quote_fallback=quote_fallback,
+        shares_fallback=shares_fallback,
     )
 
 
@@ -213,6 +255,59 @@ def risk_free_from_history(hist: pd.DataFrame) -> tuple[float, bool]:
 
 
 # ---- helpers ---------------------------------------------------------------
+
+_EMPTY_INFO_REASON = "the company-info response had no name, price or share count"
+
+# What counts as `.info` having answered: any one of these is a real quote.
+_BASIC_QUOTE_FIELDS = (
+    "longName",
+    "shortName",
+    "currentPrice",
+    "regularMarketPrice",
+    "previousClose",
+    "sharesOutstanding",
+)
+
+
+_NO_SHARES_REASON = "the company-info response had no share count"
+
+
+def _balance_sheet_shares(balance_sheet: pd.DataFrame) -> Optional[float]:
+    for label in ("Ordinary Shares Number", "Share Issued"):
+        shares = _latest_row(balance_sheet, label)
+        if shares and shares > 0:
+            return shares
+    return None
+
+
+def _has_quote_fields(info: dict) -> bool:
+    return any(info.get(k) for k in _BASIC_QUOTE_FIELDS)
+
+
+def _interest_expense(financials: pd.DataFrame) -> Optional[float]:
+    # "Interest Expense" is the headline line; the non-operating variant is
+    # the fallback because some filings only break it out that way.
+    interest_expense = _latest_row(financials, "Interest Expense")
+    if interest_expense is None:
+        interest_expense = _latest_row(financials, "Interest Expense Non Operating")
+    if interest_expense is not None:
+        # Reported as a positive cost on the income statement, but flip a
+        # negative just in case, since yfinance is inconsistent about signs.
+        interest_expense = abs(interest_expense)
+    return interest_expense
+
+
+def _last_close(tk: Fundamentals) -> Optional[float]:
+    """The latest daily close, or None if the history is missing or unusable."""
+    try:
+        close = tk.history(period="5d")["Close"].dropna()
+    except Exception:
+        return None
+    if close.empty:
+        return None
+    price = _coerce_float(close.iloc[-1])
+    return price if price and price > 0 else None
+
 
 
 def _safe_info(tk: Fundamentals) -> tuple[dict, Optional[str]]:

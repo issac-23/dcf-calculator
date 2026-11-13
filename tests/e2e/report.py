@@ -74,6 +74,18 @@ def _money(x: Optional[float]) -> str:
 def _say(caveat: Caveat) -> str:
     """The report's wording for each caveat: one line, after the ticker."""
     kind = caveat.kind
+    if kind is CaveatKind.QUOTE_FALLBACK:
+        return (
+            f": Yahoo's company info did not answer ({caveat.subject}), so "
+            "shares, debt and cash come from the balance sheet and the price "
+            "from the last close. Sector, beta and name are unavailable, so "
+            "the wrong-sector check could not run."
+        )
+    if kind is CaveatKind.SHARES_FALLBACK:
+        return (
+            f": Yahoo's company info had no share count ({caveat.subject}), "
+            "so shares come from the balance sheet. The price is still Yahoo's."
+        )
     if kind is CaveatKind.WRONG_SECTOR:
         return (
             f" is in {caveat.subject}, where a free-cash-flow DCF "
