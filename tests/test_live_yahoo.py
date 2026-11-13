@@ -49,6 +49,11 @@ def test_yahoo_serves_company_data():
         f"app is running on its balance-sheet fallback\n{probe}"
     )
 
+    assert data.shares_fallback is None, (
+        f"Yahoo's company info had no share count ({data.shares_fallback}); "
+        f"shares came from the balance sheet instead\n{probe}"
+    )
+
     for field in ("shares_outstanding", "revenue_base", "current_price"):
         value = getattr(data, field)
         assert value and value > 0, f"{field} is {value!r}\n{probe}"
