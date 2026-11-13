@@ -10,8 +10,10 @@ Notes for anyone — human or agent — writing code here.
 them they cover every path a person can take through this app: a valuation
 that works, the same one with the ticker typed sloppily, one that works but
 produces an absurd number, a reverse solve with no answer, a company that is
-the wrong shape for the model, data that isn't there (or that Yahoo refuses
-to hand over), and a Treasury quote that is dead. Every journey loads through
+the wrong shape for the model, data that isn't there (or that Yahoo's
+company info won't answer, which the app works around from the balance sheet
+and price history when the statements loaded), and a Treasury quote that is
+dead. Every journey loads through
 the real Load button. Each starts at a recorded Yahoo Finance payload and
 ends at a rendered Streamlit page or a fair value per share, with nothing
 stubbed in between except the network call itself.
@@ -81,9 +83,10 @@ Streamlit Cloud. It exists because Yahoo once stopped answering `.info` to
 datacenter IPs while financials kept working, and the app was broken for weeks
 behind a green suite. A red run there means Yahoo or the deploy broke, not the
 code: check the live app at https://dcf-calculator-issac.streamlit.app before
-touching anything. The failure message says which of `.info`, `.financials` and
-`.cashflow` came back empty. GitHub pauses schedules on a repo with no activity
-for 60 days; start it by hand from the Actions tab (`workflow_dispatch`) if
+touching anything. The failure message says which of `.info`, `.financials`,
+`.cashflow` and `.balance_sheet` came back empty, and the test also fails when
+the app had to use its balance-sheet fallback because `.info` did not answer.
+GitHub pauses schedules on a repo with no activity for 60 days; start it by hand from the Actions tab (`workflow_dispatch`) if
 that happens. Locally, `pytest -m live`.
 
 Deploys: Streamlit Cloud redeploys on every push to main by rerunning `app.py`,
