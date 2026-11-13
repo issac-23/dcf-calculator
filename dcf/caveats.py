@@ -23,6 +23,7 @@ from dcf.wacc import WACCBreakdown
 
 class CaveatKind(Enum):
     # Declaration order is the order a report lists them in.
+    QUOTE_FALLBACK = "quote_fallback"
     WRONG_SECTOR = "wrong_sector"
     DEFAULT_CLAMPED = "default_clamped"
     NO_IMPLIED_GROWTH = "no_implied_growth"
@@ -37,7 +38,8 @@ class Caveat:
     kind: CaveatKind
     # What the finding is about, when that varies: the sector for
     # WRONG_SECTOR, the assumption key for DEFAULT_CLAMPED, the reason for
-    # WACC_NOT_DERIVED. Empty otherwise.
+    # WACC_NOT_DERIVED, why the company info was unavailable for
+    # QUOTE_FALLBACK. Empty otherwise.
     subject: str = ""
 
 
@@ -50,6 +52,8 @@ def find_caveats(
 ) -> tuple[Caveat, ...]:
     """`implied_found` is None when there was no price to solve against."""
     found = []
+    if company.quote_fallback:
+        found.append(Caveat(CaveatKind.QUOTE_FALLBACK, company.quote_fallback))
     if company.is_dcf_inappropriate:
         found.append(Caveat(CaveatKind.WRONG_SECTOR, company.sector))
     for key in sorted(clamped):
