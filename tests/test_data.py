@@ -300,7 +300,8 @@ def _statements_only(balance_sheet, history=None):
             raise history
         fix.history = broken
     else:
-        fix.history = lambda period: history if history is not None else pd.DataFrame()
+        usable = pd.DataFrame({"Close": [100.0]}) if history is None else history
+        fix.history = lambda period: usable
     return fix
 
 
@@ -339,8 +340,35 @@ def test_cash_prefers_the_plain_cash_row_and_ordinary_shares_win():
     [RuntimeError("boom"), pd.DataFrame({"Close": [float("nan")]}), pd.DataFrame()],
     ids=["raises", "all-nan", "empty"],
 )
-def test_a_dead_price_history_costs_the_price_and_not_the_company(history):
+def test_a_dead_price_history_means_no_valuation_not_a_price_of_zero(history):
     fix = _statements_only(_bs(Ordinary_Shares_Number=800.0), history)
+    with pytest.raises(DataFetchError) as excinfo:
+        build_company_data("TEST", fix)
+    message = str(excinfo.value)
+    assert "no quote or price for 'TEST'" in message
+    assert "delisted" in message and "may not have answered" in message
+
+
+def test_a_dead_price_history_after_a_raised_info_blames_the_source():
+    fix = _statements_only(_bs(Ordinary_Shares_Number=800.0), pd.DataFrame())
+    refusing = RefusingTicker(RuntimeError("401 Client Error"))
+    refusing.financials = fix.financials
+    refusing.cashflow = fix.cashflow
+    refusing.balance_sheet = fix.balance_sheet
+    refusing.history = fix.history
+    with pytest.raises(DataFetchError) as excinfo:
+        build_company_data("TEST", refusing)
+    message = str(excinfo.value)
+    assert "Yahoo Finance didn't answer when fetching price data" in message
+    assert "401 Client Error" in message
+
+
+def test_partial_info_without_shares_takes_them_from_the_balance_sheet():
+    fix = _full_fixture()
+    fix.info.pop("sharesOutstanding")
+    fix.balance_sheet = _bs(Ordinary_Shares_Number=800.0)
     data = build_company_data("TEST", fix)
-    assert data.current_price == 0.0
     assert data.shares_outstanding == 800.0
+    assert data.current_price == 150.0, "the price stays Yahoo's"
+    assert data.name == "Test Co." and data.beta == 1.2
+    assert data.shares_fallback and data.quote_fallback is None

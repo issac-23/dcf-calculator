@@ -256,7 +256,13 @@ def _say(caveat: Caveat) -> str:
             "come from the latest balance sheet and the current price is the "
             "last close in the price history. The name, sector and beta are "
             "unavailable: the check for sectors where a DCF is the wrong tool "
-            "could not run, and WACC is not derived from beta."
+            "could not run."
+        )
+    if kind is CaveatKind.SHARES_FALLBACK:
+        return (
+            f"Yahoo Finance's company info had a quote but no share count "
+            f"({caveat.subject}), so shares outstanding come from the latest "
+            "balance sheet. The price is still Yahoo's."
         )
     if kind is CaveatKind.WRONG_SECTOR:
         return (
@@ -320,7 +326,10 @@ if clamped:
 
 header_left, header_right = st.columns([3, 1])
 with header_left:
-    st.subheader(f"{company.ticker} · {company.name}")
+    if company.name == company.ticker:
+        st.subheader(company.ticker)
+    else:
+        st.subheader(f"{company.ticker} · {company.name}")
     if company.sector or company.industry:
         st.caption(f"{company.sector} · {company.industry}")
 with header_right:
@@ -329,6 +338,7 @@ with header_right:
 
 for kind in (
     CaveatKind.QUOTE_FALLBACK,
+    CaveatKind.SHARES_FALLBACK,
     CaveatKind.DEBT_UNREPORTED,
     CaveatKind.WRONG_SECTOR,
     CaveatKind.NEGATIVE_MARGIN,
