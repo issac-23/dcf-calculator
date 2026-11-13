@@ -199,7 +199,15 @@ def recorded_source() -> RecordedSource:
     if not raw:
         return RecordedSource(info_refused=refused, no_balance_sheet=no_bs)
     if raw == "error":
-        return RecordedSource(ConnectionError("Yahoo unreachable"))
+        return RecordedSource(
+            ConnectionError("Yahoo unreachable"),
+            info_refused=refused,
+            no_balance_sheet=no_bs,
+        )
     if raw == "empty":
-        return RecordedSource([])
-    return RecordedSource([float(x) for x in raw.split(",")])
+        return RecordedSource([], info_refused=refused, no_balance_sheet=no_bs)
+    return RecordedSource(
+        [float(x) for x in raw.split(",")],
+        info_refused=refused,
+        no_balance_sheet=no_bs,
+    )
