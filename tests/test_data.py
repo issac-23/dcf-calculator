@@ -280,3 +280,67 @@ def test_negative_interest_expense_is_normalised_to_a_cost():
     tk.financials.loc["Interest Expense"] = -2_400
     d = build_company_data("TEST", tk)
     assert d.interest_expense == 2_400
+
+
+# ----- the balance-sheet fallback ---------------------------------------------
+# Failure modes (also in the PR body): the share row falling back from
+# "Ordinary Shares Number" to "Share Issued"; debt missing reading as zero
+# instead of unknown; cash taking the wrong row or none; a price history that
+# raises or is empty taking the valuation down. The journeys run one recording,
+# so these label lookups can only be reached here.
+
+
+def _statements_only(balance_sheet, history=None):
+    """A ticker whose `.info` is the near-empty dict yfinance can return."""
+    fix = _full_fixture()
+    fix.info = {"trailingPegRatio": None}
+    fix.balance_sheet = balance_sheet
+    if isinstance(history, Exception):
+        def broken(period):
+            raise history
+        fix.history = broken
+    else:
+        fix.history = lambda period: history if history is not None else pd.DataFrame()
+    return fix
+
+
+def _bs(**rows):
+    col = pd.Timestamp("2024-12-31")
+    return pd.DataFrame({col: list(rows.values())}, index=[k.replace("_", " ") for k in rows])
+
+
+def test_shares_fall_back_to_share_issued_and_debt_and_cash_stay_honest():
+    fix = _statements_only(
+        _bs(Share_Issued=900.0, Cash_Cash_Equivalents_And_Short_Term_Investments=70.0)
+    )
+    data = build_company_data("TEST", fix)
+    assert data.shares_outstanding == 900.0
+    assert data.total_debt is None, "unreported debt is unknown, not zero"
+    assert data.net_debt == -70.0
+
+
+def test_cash_prefers_the_plain_cash_row_and_ordinary_shares_win():
+    fix = _statements_only(
+        _bs(
+            Ordinary_Shares_Number=800.0,
+            Share_Issued=900.0,
+            Total_Debt=100.0,
+            Cash_And_Cash_Equivalents=30.0,
+            Cash_Cash_Equivalents_And_Short_Term_Investments=70.0,
+        )
+    )
+    data = build_company_data("TEST", fix)
+    assert data.shares_outstanding == 800.0
+    assert data.net_debt == 70.0
+
+
+@pytest.mark.parametrize(
+    "history",
+    [RuntimeError("boom"), pd.DataFrame({"Close": [float("nan")]}), pd.DataFrame()],
+    ids=["raises", "all-nan", "empty"],
+)
+def test_a_dead_price_history_costs_the_price_and_not_the_company(history):
+    fix = _statements_only(_bs(Ordinary_Shares_Number=800.0), history)
+    data = build_company_data("TEST", fix)
+    assert data.current_price == 0.0
+    assert data.shares_outstanding == 800.0

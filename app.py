@@ -249,6 +249,15 @@ def _signed_pct(x: float) -> str:
 
 def _say(caveat: Caveat) -> str:
     kind = caveat.kind
+    if kind is CaveatKind.QUOTE_FALLBACK:
+        return (
+            f"Yahoo Finance's company-info request didn't answer "
+            f"({caveat.subject}), so shares outstanding, total debt and cash "
+            "come from the latest balance sheet and the current price is the "
+            "last close in the price history. The name, sector and beta are "
+            "unavailable: the check for sectors where a DCF is the wrong tool "
+            "could not run, and WACC is not derived from beta."
+        )
     if kind is CaveatKind.WRONG_SECTOR:
         return (
             f"DCF is unreliable for {caveat.subject.lower()} companies. "
@@ -318,7 +327,12 @@ with header_right:
     if company.current_price:
         st.metric("Current price", f"${company.current_price:,.2f}")
 
-for kind in (CaveatKind.DEBT_UNREPORTED, CaveatKind.WRONG_SECTOR, CaveatKind.NEGATIVE_MARGIN):
+for kind in (
+    CaveatKind.QUOTE_FALLBACK,
+    CaveatKind.DEBT_UNREPORTED,
+    CaveatKind.WRONG_SECTOR,
+    CaveatKind.NEGATIVE_MARGIN,
+):
     for caveat in valuation.caveats_of(kind):
         st.warning(_say(caveat))
 
