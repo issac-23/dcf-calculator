@@ -98,6 +98,10 @@ class CompanyData:
     # are unavailable in that case.
     quote_fallback: Optional[str] = None
 
+    # Set when `.info` answered but had no share count, and the balance sheet
+    # supplied it. Only the share count differs; the price is still Yahoo's.
+    shares_fallback: Optional[str] = None
+
 
 class Fundamentals(Protocol):
     """The slice of yfinance.Ticker we depend on: what a market-data source
@@ -158,31 +162,50 @@ def build_company_data(symbol: str, tk: Fundamentals) -> CompanyData:
             "Yahoo may not have financials for this ticker."
         )
 
+    # Where shares, price, debt and cash come from. `.info` is the first
+    # choice; the statements stand in when it did not answer (everything), or
+    # when it answered but had no share count (shares only).
+    shares_fallback: Optional[str] = None
     if quote_fallback:
-        return _from_statements(
-            symbol, tk, quote_fallback, financials, cashflow, revenue_base
-        )
+        balance_sheet, _ = _safe_frame(tk, "balance_sheet")
+        shares_outstanding = _balance_sheet_shares(balance_sheet)
+        if not shares_outstanding:
+            raise _source_unreachable(symbol, "share data", quote_fallback)
+        # A delisted ticker can still have statements, and valuing it at a
+        # price of zero would be a confident answer built on nothing.
+        current_price = _last_close(tk)
+        if current_price is None:
+            if info_failure:
+                raise _source_unreachable(symbol, "price data", quote_fallback)
+            raise DataFetchError(
+                f"Yahoo returned no quote or price for '{symbol}': it may be "
+                "delisted, or Yahoo may not have answered."
+            )
+        total_debt = _latest_row(balance_sheet, "Total Debt")
+        total_cash = _latest_row(balance_sheet, "Cash And Cash Equivalents")
+        if total_cash is None:
+            total_cash = _latest_row(
+                balance_sheet, "Cash Cash Equivalents And Short Term Investments"
+            )
+    else:
+        shares_outstanding = _coerce_float(info.get("sharesOutstanding"))
+        if not shares_outstanding or shares_outstanding <= 0:
+            balance_sheet, _ = _safe_frame(tk, "balance_sheet")
+            shares_outstanding = _balance_sheet_shares(balance_sheet)
+            if not shares_outstanding:
+                raise DataFetchError(
+                    f"Could not find shares outstanding for '{symbol}'."
+                )
+            shares_fallback = _NO_SHARES_REASON
+        # Debt Yahoo did not report stays None on the CompanyData -- it is
+        # unknown, not zero -- but net_debt has to be a number, so it counts
+        # as zero there and the valuation run reports a DEBT_UNREPORTED caveat.
+        total_debt = _coerce_float(info.get("totalDebt"))
+        total_cash = _coerce_float(info.get("totalCash"), default=0.0)
 
-    shares_outstanding = _coerce_float(info.get("sharesOutstanding"))
-    if not shares_outstanding or shares_outstanding <= 0:
-        if info_failure:
-            raise _source_unreachable(symbol, "share data", info_failure)
-        raise DataFetchError(
-            f"Could not find shares outstanding for '{symbol}'."
-        )
-
-    # Debt Yahoo did not report stays None on the CompanyData -- it is unknown,
-    # not zero -- but net_debt has to be a number, so it counts as zero there
-    # and the valuation run reports a DEBT_UNREPORTED caveat.
-    total_debt = _coerce_float(info.get("totalDebt"))
-    total_cash = _coerce_float(info.get("totalCash"), default=0.0) or 0.0
-    net_debt = (total_debt or 0.0) - total_cash
-
-    interest_expense = _interest_expense(financials)
+    net_debt = (total_debt or 0.0) - (total_cash or 0.0)
 
     hist = _historical_averages(financials, cashflow)
-
-    is_inappropriate = sector in _DCF_INAPPROPRIATE_SECTORS
 
     return CompanyData(
         ticker=symbol,
@@ -196,56 +219,6 @@ def build_company_data(symbol: str, tk: Fundamentals) -> CompanyData:
         beta=_coerce_float(info.get("beta")),
         market_cap=_coerce_float(info.get("marketCap")),
         total_debt=total_debt,
-        interest_expense=interest_expense,
-        historical_revenue_growth=hist["revenue_growth"],
-        historical_operating_margin=hist["operating_margin"],
-        historical_tax_rate=hist["tax_rate"],
-        historical_capex_pct=hist["capex_pct"],
-        historical_da_pct=hist["da_pct"],
-        historical_wc_pct=hist["wc_pct"],
-        is_dcf_inappropriate=is_inappropriate,
-    )
-
-
-def _from_statements(
-    symbol: str,
-    tk: Fundamentals,
-    reason: str,
-    financials: pd.DataFrame,
-    cashflow: pd.DataFrame,
-    revenue_base: float,
-) -> CompanyData:
-    """Build a `CompanyData` without `.info`: shares, debt and cash from the
-    balance sheet, the price from the last close. Sector, beta, market cap and
-    name are simply not known, and stay None or empty."""
-    balance_sheet, _ = _safe_frame(tk, "balance_sheet")
-    shares = _latest_row(balance_sheet, "Ordinary Shares Number")
-    if not shares or shares <= 0:
-        shares = _latest_row(balance_sheet, "Share Issued")
-    if not shares or shares <= 0:
-        raise _source_unreachable(symbol, "share data", reason)
-
-    total_debt = _latest_row(balance_sheet, "Total Debt")
-    cash = _latest_row(balance_sheet, "Cash And Cash Equivalents")
-    if cash is None:
-        cash = _latest_row(
-            balance_sheet, "Cash Cash Equivalents And Short Term Investments"
-        )
-    net_debt = (total_debt or 0.0) - (cash or 0.0)
-
-    hist = _historical_averages(financials, cashflow)
-    return CompanyData(
-        ticker=symbol,
-        name=symbol,
-        sector="",
-        industry="",
-        current_price=_last_close(tk) or 0.0,
-        revenue_base=revenue_base,
-        shares_outstanding=shares,
-        net_debt=net_debt,
-        beta=None,
-        market_cap=None,
-        total_debt=total_debt,
         interest_expense=_interest_expense(financials),
         historical_revenue_growth=hist["revenue_growth"],
         historical_operating_margin=hist["operating_margin"],
@@ -253,8 +226,9 @@ def _from_statements(
         historical_capex_pct=hist["capex_pct"],
         historical_da_pct=hist["da_pct"],
         historical_wc_pct=hist["wc_pct"],
-        is_dcf_inappropriate=False,
-        quote_fallback=reason,
+        is_dcf_inappropriate=sector in _DCF_INAPPROPRIATE_SECTORS,
+        quote_fallback=quote_fallback,
+        shares_fallback=shares_fallback,
     )
 
 
@@ -293,6 +267,17 @@ _BASIC_QUOTE_FIELDS = (
     "previousClose",
     "sharesOutstanding",
 )
+
+
+_NO_SHARES_REASON = "the company-info response had no share count"
+
+
+def _balance_sheet_shares(balance_sheet: pd.DataFrame) -> Optional[float]:
+    for label in ("Ordinary Shares Number", "Share Issued"):
+        shares = _latest_row(balance_sheet, label)
+        if shares and shares > 0:
+            return shares
+    return None
 
 
 def _has_quote_fields(info: dict) -> bool:

@@ -24,6 +24,7 @@ from dcf.wacc import WACCBreakdown
 class CaveatKind(Enum):
     # Declaration order is the order a report lists them in.
     QUOTE_FALLBACK = "quote_fallback"
+    SHARES_FALLBACK = "shares_fallback"
     WRONG_SECTOR = "wrong_sector"
     DEFAULT_CLAMPED = "default_clamped"
     NO_IMPLIED_GROWTH = "no_implied_growth"
@@ -54,6 +55,8 @@ def find_caveats(
     found = []
     if company.quote_fallback:
         found.append(Caveat(CaveatKind.QUOTE_FALLBACK, company.quote_fallback))
+    if company.shares_fallback:
+        found.append(Caveat(CaveatKind.SHARES_FALLBACK, company.shares_fallback))
     if company.is_dcf_inappropriate:
         found.append(Caveat(CaveatKind.WRONG_SECTOR, company.sector))
     for key in sorted(clamped):

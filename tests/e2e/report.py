@@ -81,6 +81,11 @@ def _say(caveat: Caveat) -> str:
             "from the last close. Sector, beta and name are unavailable, so "
             "the wrong-sector check could not run."
         )
+    if kind is CaveatKind.SHARES_FALLBACK:
+        return (
+            f": Yahoo's company info had no share count ({caveat.subject}), "
+            "so shares come from the balance sheet. The price is still Yahoo's."
+        )
     if kind is CaveatKind.WRONG_SECTOR:
         return (
             f" is in {caveat.subject}, where a free-cash-flow DCF "
