@@ -5,6 +5,9 @@ pytest never runs it. Run it by hand when a fixture should be refreshed:
 
     python tests/e2e/record.py            # re-record every ticker in ROSTER
     python tests/e2e/record.py JNJ AAPL   # just these
+    python tests/e2e/record.py --add balance_sheet,history AAPL
+                                          # add only those keys to an existing
+                                          # recording, leaving the rest as is
 
 Refreshing will change the committed snapshot report, because prices and
 filings move. That is the intended workflow: re-record, run the suite, read
@@ -17,12 +20,12 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from tests.e2e.replay import FIXTURES, frame_to_json  # noqa: E402
+from tests.e2e.replay import FIXTURES, frame_to_json, history_to_json  # noqa: E402
 
 # Each ticker earns its place by covering a distinct path through the model.
 ROSTER = {
@@ -38,6 +41,51 @@ ROSTER = {
 _SCALARS = (str, int, float, bool, type(None))
 
 
+# Keys `--add` can fill in on an existing recording.
+ADDABLE = ("balance_sheet", "history")
+
+
+def _frame(tk, attr):
+    try:
+        return frame_to_json(getattr(tk, attr))
+    except Exception:
+        return frame_to_json(None)
+
+
+def _history(tk, recorded_at):
+    """Closes up to the recording date, so the price agrees with the rest of
+    the recording; ten days of lead-in cover weekends and holidays. Without a
+    date it is simply the last few days."""
+    try:
+        if recorded_at:
+            end = datetime.strptime(recorded_at, "%Y-%m-%d") + timedelta(days=1)
+            start = end - timedelta(days=10)
+            return history_to_json(
+                tk.history(
+                    start=start.strftime("%Y-%m-%d"), end=end.strftime("%Y-%m-%d")
+                )
+            )
+        return history_to_json(tk.history(period="5d"))
+    except Exception:
+        return history_to_json(None)
+
+
+def add_keys(symbol: str, keys) -> Path:
+    """Add `keys` to an existing fixture and leave everything else as it was
+    recorded, so the snapshot numbers do not move."""
+    import yfinance as yf
+
+    path = FIXTURES / f"{symbol.upper()}.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    tk = yf.Ticker(symbol)
+    if "balance_sheet" in keys:
+        payload["balance_sheet"] = _frame(tk, "balance_sheet")
+    if "history" in keys:
+        payload["history"] = _history(tk, payload["recorded_at"])
+    path.write_text(json.dumps(payload, indent=1, sort_keys=True), encoding="utf-8")
+    return path
+
+
 def record(symbol: str) -> Path:
     import yfinance as yf
 
@@ -50,10 +98,7 @@ def record(symbol: str) -> Path:
     info = {k: v for k, v in raw_info.items() if isinstance(v, _SCALARS)}
 
     def frame(attr):
-        try:
-            return frame_to_json(getattr(tk, attr))
-        except Exception:
-            return frame_to_json(None)
+        return _frame(tk, attr)
 
     payload = {
         "symbol": symbol.upper(),
@@ -62,6 +107,8 @@ def record(symbol: str) -> Path:
         "info": info,
         "financials": frame("financials"),
         "cashflow": frame("cashflow"),
+        "balance_sheet": frame("balance_sheet"),
+        "history": _history(tk, None),
     }
 
     FIXTURES.mkdir(parents=True, exist_ok=True)
@@ -71,6 +118,16 @@ def record(symbol: str) -> Path:
 
 
 def main(argv):
+    if len(argv) > 1 and argv[1] == "--add":
+        keys = argv[2].split(",") if len(argv) > 2 else []
+        bad = [k for k in keys if k not in ADDABLE]
+        if bad or not keys or len(argv) < 4:
+            sys.exit("usage: record.py --add balance_sheet,history SYMBOL [SYMBOL...]")
+        for s in (a.upper() for a in argv[3:]):
+            path = add_keys(s, keys)
+            print(f"  {s:6} -> {path.name}  (added {', '.join(keys)})")
+        print("\nAdded. The rest of each recording is untouched.")
+        return
     symbols = [s.upper() for s in argv[1:]] or list(ROSTER)
     for s in symbols:
         path = record(s)
