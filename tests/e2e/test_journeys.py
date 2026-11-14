@@ -10,7 +10,8 @@ question ("what does this company come out worth, and do I believe it?"), and
 the paths that question can take are: it works (once with a tidy ticker, once
 typed the way people type it), it works but the answer is absurd, the reverse
 solve has no answer, the company is the wrong shape for the model, the data
-isn't there (or Yahoo refuses to hand it over), or the Treasury quote behind
+isn't there (or Yahoo's company info won't answer, which the app works around
+when the statements loaded), or the Treasury quote behind
 every WACC is dead. That is eight journeys, and they are these eight. The
 ninth and last test pins the numbers.
 
@@ -263,25 +264,95 @@ def test_a_delisted_company_fails_with_a_message_a_human_can_act_on():
     assert any("Enter a ticker" in i.value for i in at.info)
 
 
-def test_yahoo_refusing_company_info_says_so_instead_of_blaming_the_ticker(monkeypatch):
-    """On a blocked datacenter IP the statements load and `.info` is refused.
+def everything_on_the_page(at: AppTest) -> str:
+    """Every string any element on the page carries, not just the ones the
+    helpers above know to read: markdown, captions, errors, metrics, tables."""
+    parts = [str(e.value) for e in at.exception]
+
+    def walk(block):
+        for child in block.children.values():
+            if hasattr(child, "children"):
+                walk(child)
+            else:
+                parts.append(str(child.proto))
+
+    walk(at.main)
+    walk(at.sidebar)
+    return " ".join(parts)
+
+
+@pytest.mark.parametrize("balance_sheet", [True, False], ids=["fallback", "no-shares"])
+@pytest.mark.parametrize(
+    "info_mode, reason",
+    [
+        pytest.param("1", "RuntimeError: 401 Client Error", id="info-raised"),
+        pytest.param(replay.INFO_EMPTY, "had no name, price or share count", id="info-near-empty"),
+    ],
+)
+def test_yahoo_not_answering_for_company_info_keeps_the_valuation_or_says_so(
+    monkeypatch, info_mode, reason, balance_sheet
+):
+    """On a blocked datacenter IP the statements load and `.info` is refused,
+    either by raising or by handing back a near-empty dict.
 
     The old app reported that it could not find shares outstanding for AAPL,
-    which sent people off to check a ticker that was fine. The screen has to
-    name the source and carry the real exception, minus the crumb and cookie
-    that ride along in the request URL.
+    which sent people off to check a ticker that was fine. Now the valuation
+    carries on: shares, debt and cash come from the balance sheet, the price
+    from the last close, and a caveat says so (and that the sector check could
+    not run). When the balance sheet has no share count either, the screen
+    names the source instead of the ticker. Either way the crumb and cookie
+    that ride along in the request URL never reach the page.
     """
-    monkeypatch.setenv(replay.INFO_REFUSED_ENV_VAR, "1")
+    monkeypatch.setenv(replay.INFO_REFUSED_ENV_VAR, info_mode)
+    if not balance_sheet:
+        monkeypatch.setenv(replay.NO_BALANCE_SHEET_ENV_VAR, "1")
 
     at = load_via_the_button("AAPL")
 
-    errors = " ".join(e.value for e in at.error)
-    assert "Yahoo Finance didn't answer" in errors
-    assert "RuntimeError" in errors and "401 Client Error" in errors
-    assert "shares outstanding" not in errors
-    assert "abc123" not in errors and "xyz" not in errors
-    assert at.session_state["company"] is None
-    assert any("Enter a ticker" in i.value for i in at.info)
+    everything = everything_on_the_page(at)
+    assert "AAPL" in everything, "the page walk should see the page"
+    assert "abc123" not in everything and "xyz" not in everything
+
+    if not balance_sheet:
+        errors = " ".join(e.value for e in at.error)
+        assert "Yahoo Finance didn't answer" in errors
+        assert reason in errors
+        assert "shares outstanding" not in errors
+        assert at.session_state["company"] is None
+        assert any("Enter a ticker" in i.value for i in at.info)
+        return
+
+    recorded = replay.load("AAPL")
+    company = at.session_state["company"]
+    assert company is not None, "a dead .info must not cost the valuation"
+    assert not at.error, "; ".join(e.value for e in at.error)
+    fair = next(m.value for m in at.metric if m.label == "Fair value / share")
+    assert fair.startswith("$"), fair
+
+    # Shares come from the balance sheet, the price from the last close.
+    shares = recorded.balance_sheet.loc["Ordinary Shares Number"].dropna().iloc[0]
+    last_close = recorded.history("5d")["Close"].iloc[-1]
+    assert company.shares_outstanding == shares
+    assert company.current_price == pytest.approx(last_close)
+    shown_price = next(m.value for m in at.metric if m.label == "Current price")
+    assert shown_price == f"${last_close:,.2f}"
+    assert company.name == "AAPL" and company.sector == "" and company.beta is None
+
+    caveats = [c.kind for c in report_caveats(at)]
+    assert caveats.count(CaveatKind.QUOTE_FALLBACK) == 1
+    warnings = " ".join(w.value for w in at.warning)
+    assert "balance sheet" in warnings and "price history" in warnings
+    assert reason in warnings
+    assert "sector" in warnings and "could not run" in warnings
+
+
+def report_caveats(at: AppTest):
+    """The caveats of the valuation the page is showing, for the loaded company."""
+    from dcf.market import fetch_risk_free_rate, load_source
+    from dcf.valuation import run_valuation
+
+    risk_free, _ = fetch_risk_free_rate(load_source())
+    return run_valuation(at.session_state["company"], risk_free).caveats
 
 
 @pytest.mark.parametrize(
