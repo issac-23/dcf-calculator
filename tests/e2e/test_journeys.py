@@ -463,6 +463,32 @@ def test_a_dead_treasury_quote_costs_the_rate_and_not_the_valuation(
         assert f"a {FALLBACK_RISK_FREE_RATE * 100:.2f}% fallback is in use" in caption
 
 
+def test_a_dead_treasury_quote_is_not_remembered_once_the_quote_recovers(monkeypatch):
+    """A fallback rate must never be cached.
+
+    Failure modes: a dead quote that is cached pins the fallback (and every
+    WACC built on it) for an hour after Treasury recovers; a live rate that is
+    not cached is refetched on every rerun; a fallback that loses its caveat.
+    The cache is deliberately not cleared between the two runs.
+    """
+    monkeypatch.setenv(replay.TREASURY_ENV_VAR, "error")
+    at = load_via_the_button("JNJ")
+    caption = next(c.value for c in at.caption if "10-year Treasury" in c.value)
+    assert f"a {FALLBACK_RISK_FREE_RATE * 100:.2f}% fallback is in use" in caption
+
+    monkeypatch.setenv(replay.TREASURY_ENV_VAR, "4.10,4.96")
+    at = load_via_the_button("JNJ")
+    caption = next(c.value for c in at.caption if "10-year Treasury" in c.value)
+    assert "10-year Treasury at 4.96%" in caption
+    assert "fallback" not in caption
+
+    # and a live rate IS cached: a later dead quote does not displace it
+    monkeypatch.setenv(replay.TREASURY_ENV_VAR, "error")
+    at = load_via_the_button("JNJ")
+    caption = next(c.value for c in at.caption if "10-year Treasury" in c.value)
+    assert "10-year Treasury at 4.96%" in caption
+
+
 # ----- the artifact ---------------------------------------------------------
 
 
