@@ -299,6 +299,18 @@ def _say(caveat: Caveat) -> str:
             "Historical operating margin is negative. "
             "The DCF will return a negative fair value unless you adjust margin assumptions."
         )
+    if kind is CaveatKind.NEGATIVE_TERMINAL_FCF:
+        return (
+            "Free cash flow in the final projection year is negative, so the "
+            "terminal value is negative and drags the whole valuation down. "
+            "Check margin, capex and D&A."
+        )
+    if kind is CaveatKind.NEGATIVE_EQUITY:
+        return (
+            "Equity value is zero or negative under these assumptions, so a "
+            "value per share and an upside against the price are not "
+            "meaningful. Check margin, capex, D&A and net debt."
+        )
     if kind is CaveatKind.WACC_NOT_DERIVED:
         return (
             f"WACC could not be derived for {company.ticker} — {caveat.subject} "
@@ -360,6 +372,8 @@ for kind in (
     CaveatKind.DEBT_UNREPORTED,
     CaveatKind.WRONG_SECTOR,
     CaveatKind.NEGATIVE_MARGIN,
+    CaveatKind.NEGATIVE_TERMINAL_FCF,
+    CaveatKind.NEGATIVE_EQUITY,
 ):
     for caveat in valuation.caveats_of(kind):
         st.warning(_say(caveat))
@@ -379,11 +393,18 @@ elif valuation.verdict == "overvalued":
     verdict = f"▼ {abs(upside) * 100:.1f}% overvalued"
 elif valuation.verdict == "fair":
     verdict = f"≈ Fairly valued ({upside * 100:+.1f}%)"
+elif valuation.verdict == "not_meaningful":
+    verdict = None
 else:
     verdict = "Current price unavailable"
 
 v1, v2, v3 = st.columns(3)
-v1.metric("Fair value / share", f"${fair_value:,.2f}", verdict if current > 0 else None)
+if valuation.verdict == "not_meaningful":
+    v1.metric("Fair value / share", "Not meaningful")
+else:
+    v1.metric(
+        "Fair value / share", f"${fair_value:,.2f}", verdict if current > 0 else None
+    )
 v2.metric("Current price", f"${current:,.2f}" if current > 0 else "—")
 v3.metric(
     "Implied upside",

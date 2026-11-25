@@ -46,7 +46,9 @@ VERDICT_BAND = 0.10
 # or pessimistic; inside it, in line.
 GROWTH_GAP_BAND = 0.05
 
-Verdict = Literal["undervalued", "overvalued", "fair", "no_price"]
+# "not_meaningful": equity value at or below zero, so a per-share value and an
+# upside against the price say nothing.
+Verdict = Literal["undervalued", "overvalued", "fair", "no_price", "not_meaningful"]
 GrowthReading = Literal["optimistic", "pessimistic", "in_line"]
 
 # What a person may override, keyed the way the sliders are: percent points,
@@ -93,7 +95,8 @@ class Valuation:
     wacc_reason: Optional[str]
 
     result: DCFResult
-    # (fair value - price) / price. None without a usable market price.
+    # (fair value - price) / price. None without a usable market price, and
+    # None when the equity value is not positive.
     upside: Optional[float]
     verdict: Verdict
     # Share of enterprise value that is terminal value. None when EV is zero.
@@ -132,14 +135,18 @@ def run_valuation(
     upside: Optional[float] = None
     implied: Optional[ImpliedGrowth] = None
     verdict: Verdict = "no_price"
+    meaningful = result.equity_value > 0
+    if not meaningful:
+        verdict = "not_meaningful"
     if price and price > 0:
-        upside = (result.fair_value_per_share - price) / price
-        if upside > VERDICT_BAND:
-            verdict = "undervalued"
-        elif upside < -VERDICT_BAND:
-            verdict = "overvalued"
-        else:
-            verdict = "fair"
+        if meaningful:
+            upside = (result.fair_value_per_share - price) / price
+            if upside > VERDICT_BAND:
+                verdict = "undervalued"
+            elif upside < -VERDICT_BAND:
+                verdict = "overvalued"
+            else:
+                verdict = "fair"
         implied = _implied_growth(inputs, company)
 
     tv_share = (
@@ -168,6 +175,8 @@ def run_valuation(
             seed.wacc_reason,
             seed.clamped,
             None if implied is None else implied.rate is not None,
+            result.projections[-1].fcf,
+            result.equity_value,
         ),
     )
 
