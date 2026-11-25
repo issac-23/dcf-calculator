@@ -17,7 +17,10 @@ from dcf.data import (
 from dcf.market import (
     fetch_company_data,
     fetch_risk_free_rate,
+    forget_dead_quote,
     load_source,
+    quote_is_known_dead,
+    remember_dead_quote,
     source_spec,
 )
 from dcf.caveats import Caveat, CaveatKind
@@ -111,10 +114,15 @@ def _cached_live_risk_free(source: str) -> float:
 
 
 def _risk_free(source: str) -> tuple[float, bool]:
-    try:
-        return _cached_live_risk_free(source), True
-    except _QuoteNotLive:
+    if quote_is_known_dead(source):
         return FALLBACK_RISK_FREE_RATE, False
+    try:
+        rate = _cached_live_risk_free(source)
+    except _QuoteNotLive:
+        remember_dead_quote(source)
+        return FALLBACK_RISK_FREE_RATE, False
+    forget_dead_quote(source)
+    return rate, True
 
 
 def _format_money(x: float) -> str:

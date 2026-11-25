@@ -33,6 +33,7 @@ from streamlit.testing.v1 import AppTest
 
 from dcf.caveats import CaveatKind
 from dcf.assumptions import ASSUMPTIONS, seed_inputs, seeded_wacc_pct
+from dcf import market
 from dcf.data import FALLBACK_RISK_FREE_RATE, DataFetchError, build_company_data
 from dcf.valuation import run_valuation
 
@@ -464,29 +465,53 @@ def test_a_dead_treasury_quote_costs_the_rate_and_not_the_valuation(
 
 
 def test_a_dead_treasury_quote_is_not_remembered_once_the_quote_recovers(monkeypatch):
-    """A fallback rate must never be cached.
+    """A fallback rate must never be cached, but a dead quote is not hammered.
 
     Failure modes: a dead quote that is cached pins the fallback (and every
     WACC built on it) for an hour after Treasury recovers; a live rate that is
-    not cached is refetched on every rerun; a fallback that loses its caveat.
-    The cache is deliberately not cleared between the two runs.
+    not cached is refetched on every rerun; a fallback that loses its caveat;
+    a dead quote refetched on every rerun, so each slider drag waits on a
+    failing request; a dead quote remembered past the retry window. The
+    Streamlit cache is deliberately not cleared between runs, and time is moved
+    by replacing the clock dcf.market reads, not by sleeping.
     """
-    monkeypatch.setenv(replay.TREASURY_ENV_VAR, "error")
-    at = load_via_the_button("JNJ")
-    caption = next(c.value for c in at.caption if "10-year Treasury" in c.value)
-    assert f"a {FALLBACK_RISK_FREE_RATE * 100:.2f}% fallback is in use" in caption
+    now = [1000.0]
+    monkeypatch.setattr(market, "_clock", lambda: now[0])
 
+    def caption(at):
+        return next(c.value for c in at.caption if "10-year Treasury" in c.value)
+
+    monkeypatch.setenv(replay.TREASURY_ENV_VAR, "error")
+    fetches = replay.treasury_fetches
+    at = load_via_the_button("JNJ")
+    assert f"a {FALLBACK_RISK_FREE_RATE * 100:.2f}% fallback is in use" in caption(at)
+    assert replay.treasury_fetches == fetches + 1
+
+    # within the window a second dead run does not ask the source again
+    now[0] += market._RETRY_DEAD_QUOTE_AFTER_S - 1
+    at = load_via_the_button("JNJ")
+    assert "fallback is in use" in caption(at)
+    assert replay.treasury_fetches == fetches + 1
+
+    # even if the quote has recovered, the window is honoured...
     monkeypatch.setenv(replay.TREASURY_ENV_VAR, "4.10,4.96")
     at = load_via_the_button("JNJ")
-    caption = next(c.value for c in at.caption if "10-year Treasury" in c.value)
-    assert "10-year Treasury at 4.96%" in caption
-    assert "fallback" not in caption
+    assert "fallback is in use" in caption(at)
+    assert replay.treasury_fetches == fetches + 1
 
-    # and a live rate IS cached: a later dead quote does not displace it
+    # ...and once it has passed, the source is retried and the rate is live
+    now[0] += 2
+    at = load_via_the_button("JNJ")
+    assert "10-year Treasury at 4.96%" in caption(at)
+    assert "fallback" not in caption(at)
+    assert replay.treasury_fetches == fetches + 2
+
+    # a live rate IS cached: a later dead quote does not displace it, and the
+    # source is not asked again
     monkeypatch.setenv(replay.TREASURY_ENV_VAR, "error")
     at = load_via_the_button("JNJ")
-    caption = next(c.value for c in at.caption if "10-year Treasury" in c.value)
-    assert "10-year Treasury at 4.96%" in caption
+    assert "10-year Treasury at 4.96%" in caption(at)
+    assert replay.treasury_fetches == fetches + 2
 
 
 # ----- the artifact ---------------------------------------------------------
