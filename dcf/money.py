@@ -11,6 +11,7 @@ def currency_prefix(currency: Optional[str]) -> str:
     Unknown stays `$` so US tickers and the `.info` fallback (which has no
     currency code) read exactly as they always have.
     """
-    if not currency or currency.upper() == "USD":
+    if not currency or currency == "USD":
         return "$"
-    return f"{currency.upper()} "
+    # Kept as given: "GBp" is pence, not pounds.
+    return f"{currency} "
