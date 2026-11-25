@@ -324,6 +324,12 @@ def _say(caveat: Caveat) -> str:
             "counts it as zero, which overstates equity value if the company "
             "borrows."
         )
+    if kind is CaveatKind.CASH_UNREPORTED:
+        return (
+            "Yahoo did not report cash for this ticker. Net debt below counts "
+            "it as zero, which understates equity value if the company holds "
+            "cash."
+        )
     if kind is CaveatKind.NEGATIVE_MARGIN:
         return (
             "Historical operating margin is negative. "
@@ -400,6 +406,7 @@ for kind in (
     CaveatKind.QUOTE_FALLBACK,
     CaveatKind.SHARES_FALLBACK,
     CaveatKind.DEBT_UNREPORTED,
+    CaveatKind.CASH_UNREPORTED,
     CaveatKind.WRONG_SECTOR,
     CaveatKind.NEGATIVE_MARGIN,
     CaveatKind.NEGATIVE_TERMINAL_FCF,

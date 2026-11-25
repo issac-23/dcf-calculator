@@ -53,6 +53,7 @@ def _fake_company(**overrides) -> CompanyData:
         beta=1.1,
         market_cap=4.2e10,
         total_debt=5e8,
+        total_cash=0.0,
         interest_expense=2.5e7,
         is_dcf_inappropriate=False,
     )
