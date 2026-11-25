@@ -143,6 +143,8 @@ def build_company_data(symbol: str, tk: Fundamentals) -> CompanyData:
             f"No data found for '{symbol}'. Check the ticker and try again."
         )
 
+    _refuse_mixed_currencies(symbol, info)
+
     name = info.get("longName") or info.get("shortName") or symbol
     sector = info.get("sector", "") or ""
     industry = info.get("industry", "") or ""
@@ -278,6 +280,25 @@ def _balance_sheet_shares(balance_sheet: pd.DataFrame) -> Optional[float]:
         if shares and shares > 0:
             return shares
     return None
+
+
+def _currency_code(value) -> str:
+    return value.strip().upper() if isinstance(value, str) else ""
+
+
+def _refuse_mixed_currencies(symbol: str, info: dict) -> None:
+    """An ADR's price is in the trading currency but its statements, cash and
+    debt are in the home currency, and nothing here converts between them. A
+    missing field is not a mismatch: the `.info` fallback has no `.info` at all.
+    """
+    trading = _currency_code(info.get("currency"))
+    reporting = _currency_code(info.get("financialCurrency"))
+    if trading and reporting and trading != reporting:
+        raise DataFetchError(
+            f"'{symbol}' reports its financials in {reporting} but its price is "
+            f"quoted in {trading}. This tool doesn't convert currencies, so it "
+            "can't value this ticker."
+        )
 
 
 def _has_quote_fields(info: dict) -> bool:

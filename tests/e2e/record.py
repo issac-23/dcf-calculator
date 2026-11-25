@@ -34,6 +34,7 @@ ROSTER = {
     "TSLA": "reverse DCF finds no growth rate that reaches the price",
     "JPM": "financial sector, flagged as the wrong tool",
     "KRTX": "acquired and delisted, no financials at all",
+    "TSM": "ADR: price in USD, statements in TWD, so the app has to refuse it",
 }
 
 # yfinance's `info` carries nested junk and occasional non-serializable values.
