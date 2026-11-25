@@ -10,8 +10,10 @@ Notes for anyone — human or agent — writing code here.
 them they cover every path a person can take through this app: a valuation
 that works, the same one with the ticker typed sloppily, one that works but
 produces an absurd number, a reverse solve with no answer, a company that is
-the wrong shape for the model, data that isn't there (or that Yahoo's
-company info won't answer, which the app works around from the balance sheet
+the wrong shape for the model, data that isn't there or can't be valued (a
+delisted company, or an ADR whose statements are in a different currency than
+its price, which the app refuses rather than converts), or that Yahoo's
+company info won't answer (which the app works around from the balance sheet
 and price history when the statements loaded), and a Treasury quote that is
 dead. Every journey loads through
 the real Load button. Each starts at a recorded Yahoo Finance payload and

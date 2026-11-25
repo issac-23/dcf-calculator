@@ -10,8 +10,9 @@ question ("what does this company come out worth, and do I believe it?"), and
 the paths that question can take are: it works (once with a tidy ticker, once
 typed the way people type it), it works but the answer is absurd, the reverse
 solve has no answer, the company is the wrong shape for the model, the data
-isn't there (or Yahoo's company info won't answer, which the app works around
-when the statements loaded), or the Treasury quote behind
+isn't there or can't be valued (an ADR whose statements are in another
+currency than its price), or Yahoo's company info won't answer, which the app
+works around when the statements loaded, or the Treasury quote behind
 every WACC is dead. That is eight journeys, and they are these eight. The
 ninth and last test pins the numbers.
 
@@ -288,29 +289,46 @@ def test_a_bank_is_flagged_as_the_wrong_shape_for_this_model():
     assert "Operating margin" not in notices, "only clamped inputs should be named"
 
 
-def test_a_delisted_company_fails_with_a_message_a_human_can_act_on():
+@pytest.mark.parametrize(
+    "symbol, needles",
+    [
+        pytest.param("KRTX", ["KRTX", "revenue"], id="delisted"),
+        pytest.param("TSM", ["TSM", "TWD", "USD"], id="adr-in-another-currency"),
+    ],
+)
+def test_data_that_cannot_be_valued_fails_with_a_message_a_human_can_act_on(
+    symbol, needles
+):
     """Karuna: acquired by Bristol-Myers in March 2024, no longer reporting.
+    TSMC: its ADR trades in USD but its statements are in Taiwan dollars.
 
-    Two failures share this path — a company that never had revenue, and one
-    that stopped having it. Neither can be valued by a model whose first line
-    compounds a revenue base. What matters is that the failure names the
-    missing thing instead of surfacing a KeyError.
+    Two failures share the first path -- a company that never had revenue, and
+    one that stopped having it. Neither can be valued by a model whose first
+    line compounds a revenue base. The ADR is the same shape from the other
+    side: the data is there, but revenue in TWD against a price in USD would
+    come out about 30x too high, and the tool does not convert. What matters
+    is that the failure names the problem instead of surfacing a KeyError or a
+    confident wrong number.
     """
     with pytest.raises(DataFetchError) as excinfo:
-        build_company("KRTX")
+        build_company(symbol)
 
     message = str(excinfo.value)
-    assert "KRTX" in message
-    assert "revenue" in message.lower()
+    for needle in needles:
+        assert needle.lower() in message.lower()
 
-    # And a user who types KRTX and clicks Load sees that sentence as an
+    # And a user who types the ticker and clicks Load sees that sentence as an
     # error, with the app still standing and still asking for a ticker.
-    at = load_via_the_button("KRTX")
+    at = load_via_the_button(symbol)
 
-    errors = " ".join(e.value for e in at.error)
-    assert "KRTX" in errors and "revenue" in errors.lower()
+    errors = " ".join(e.value for e in at.error).lower()
+    for needle in needles:
+        assert needle.lower() in errors
     assert at.session_state["company"] is None
     assert any("Enter a ticker" in i.value for i in at.info)
+
+    # A refused ticker is reported as not valued and has no valuation row.
+    assert report.evaluate(symbol).valuation is None
 
 
 def everything_on_the_page(at: AppTest) -> str:
