@@ -7,6 +7,7 @@ deterministic fixtures so failures point at our code, not at Yahoo flaking.
 import pandas as pd
 import pytest
 
+from dcf.caveats import CaveatKind, find_caveats
 from dcf.data import (
     CompanyData,
     DataFetchError,
@@ -372,6 +373,54 @@ def test_partial_info_without_shares_takes_them_from_the_balance_sheet():
     assert data.current_price == 150.0, "the price stays Yahoo's"
     assert data.name == "Test Co." and data.beta == 1.2
     assert data.shares_fallback and data.quote_fallback is None
+
+
+# ----- unreported cash ---------------------------------------------------------
+# Failure modes (also in the PR body): missing cash silently zero; present cash
+# no longer subtracted; missing debt and missing cash not both flagged; the
+# balance-sheet fallback without a cash row reading as zero. No recorded
+# fixture lacks totalCash (KRTX has no financials at all), so the journeys
+# cannot reach these.
+
+
+def _kinds(company):
+    return {c.kind for c in find_caveats(company, None, "x", [], None)}
+
+
+def test_missing_cash_is_none_and_flagged_not_silently_zero():
+    tk = _full_fixture()
+    tk.info = {k: v for k, v in tk.info.items() if k != "totalCash"}
+    d = build_company_data("TEST", tk)
+    assert d.total_cash is None
+    assert d.net_debt == 50_000, "net debt counts missing cash as zero"
+    assert CaveatKind.CASH_UNREPORTED in _kinds(d)
+
+
+def test_reported_cash_is_still_subtracted_and_not_flagged():
+    d = build_company_data("TEST", _full_fixture())
+    assert d.total_cash == 20_000
+    assert d.net_debt == 30_000
+    assert CaveatKind.CASH_UNREPORTED not in _kinds(d)
+
+
+def test_missing_debt_and_missing_cash_are_both_flagged():
+    tk = _full_fixture()
+    tk.info = {k: v for k, v in tk.info.items() if k not in ("totalDebt", "totalCash")}
+    d = build_company_data("TEST", tk)
+    assert d.net_debt == 0.0
+    assert {CaveatKind.DEBT_UNREPORTED, CaveatKind.CASH_UNREPORTED} <= _kinds(d)
+
+
+def test_balance_sheet_fallback_without_a_cash_row_is_none_not_zero():
+    d = build_company_data("TEST", _statements_only(_bs(Ordinary_Shares_Number=800.0, Total_Debt=100.0)))
+    assert d.total_cash is None
+    assert d.net_debt == 100.0
+    assert CaveatKind.CASH_UNREPORTED in _kinds(d)
+    with_cash = build_company_data(
+        "TEST",
+        _statements_only(_bs(Ordinary_Shares_Number=800.0, Cash_And_Cash_Equivalents=30.0)),
+    )
+    assert with_cash.total_cash == 30.0
 
 
 # Failure mode from #29: upper-casing the codes makes a price in pence ("GBp")
