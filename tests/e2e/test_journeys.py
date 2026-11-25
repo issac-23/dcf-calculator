@@ -232,8 +232,7 @@ def test_a_volatile_company_is_discounted_far_below_market_and_says_why():
     assert "pp above" in page_text(at), "the page should say the market is the optimist"
 
     # Then the person drags the margin to the floor: the model stops giving a
-    # number at all, instead of calling a negative value "overvalued". Sliders
-    # are found by label; their keys are not stable here.
+    # number at all, instead of calling a negative value "overvalued".
     kinds = [c.kind for c in v.caveats]
     assert CaveatKind.NEGATIVE_EQUITY not in kinds, "AAPL opens on a positive value"
     next(s for s in at.slider if s.label == "Operating margin").set_value(-20.0).run()

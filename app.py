@@ -297,7 +297,7 @@ def _say(caveat: Caveat) -> str:
     if kind is CaveatKind.NEGATIVE_MARGIN:
         return (
             "Historical operating margin is negative. "
-            "The DCF will return a negative fair value unless you adjust margin assumptions."
+            "Unless you adjust the margin assumption, the valuation may come out not meaningful."
         )
     if kind is CaveatKind.NEGATIVE_TERMINAL_FCF:
         return (
