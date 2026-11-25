@@ -102,6 +102,12 @@ class CompanyData:
     # supplied it. Only the share count differs; the price is still Yahoo's.
     shares_fallback: Optional[str] = None
 
+    # The currency the price is quoted in, as Yahoo's `.info` reports it. None
+    # when `.info` didn't say, which includes the balance-sheet fallback: the
+    # price there is from history in the trading currency, but the code is
+    # unknown.
+    currency: Optional[str] = None
+
 
 class Fundamentals(Protocol):
     """The slice of yfinance.Ticker we depend on: what a market-data source
@@ -231,6 +237,7 @@ def build_company_data(symbol: str, tk: Fundamentals) -> CompanyData:
         is_dcf_inappropriate=sector in _DCF_INAPPROPRIATE_SECTORS,
         quote_fallback=quote_fallback,
         shares_fallback=shares_fallback,
+        currency=_currency_code(info.get("currency")) or None,
     )
 
 

@@ -24,6 +24,7 @@ from dcf.market import (
     source_spec,
 )
 from dcf.caveats import Caveat, CaveatKind
+from dcf.money import currency_prefix
 from dcf.valuation import run_valuation
 
 st.set_page_config(
@@ -125,18 +126,27 @@ def _risk_free(source: str) -> tuple[float, bool]:
     return rate, True
 
 
+# Set once a company is loaded: "$" for USD or an unknown currency, else the
+# code ("JPY "). Every money figure below goes through it.
+_PREFIX = "$"
+
+
+def _price(x: float) -> str:
+    return f"{_PREFIX}{x:,.2f}"
+
+
 def _format_money(x: float) -> str:
     if x is None:
         return "—"
     abs_x = abs(x)
     sign = "-" if x < 0 else ""
     if abs_x >= 1e12:
-        return f"{sign}${abs_x / 1e12:.2f}T"
+        return f"{sign}{_PREFIX}{abs_x / 1e12:.2f}T"
     if abs_x >= 1e9:
-        return f"{sign}${abs_x / 1e9:.2f}B"
+        return f"{sign}{_PREFIX}{abs_x / 1e9:.2f}B"
     if abs_x >= 1e6:
-        return f"{sign}${abs_x / 1e6:.2f}M"
-    return f"{sign}${abs_x:,.0f}"
+        return f"{sign}{_PREFIX}{abs_x / 1e6:.2f}M"
+    return f"{sign}{_PREFIX}{abs_x:,.0f}"
 
 
 def _format_pct(x):
@@ -183,6 +193,8 @@ company: CompanyData | None = st.session_state.company
 if company is None:
     st.info("Enter a ticker in the sidebar and click **Load financials** to begin.")
     st.stop()
+
+_PREFIX = currency_prefix(company.currency)
 
 
 # ----- sidebar: assumptions (only after a company is loaded) ----------------
@@ -394,7 +406,7 @@ with header_left:
         st.caption(f"{company.sector} · {company.industry}")
 with header_right:
     if company.current_price:
-        st.metric("Current price", f"${company.current_price:,.2f}")
+        st.metric("Current price", _price(company.current_price))
 
 for kind in (
     CaveatKind.QUOTE_FALLBACK,
@@ -433,9 +445,9 @@ if valuation.verdict == "not_meaningful":
     v1.metric("Fair value / share", "Not meaningful")
 else:
     v1.metric(
-        "Fair value / share", f"${fair_value:,.2f}", verdict if current > 0 else None
+        "Fair value / share", _price(fair_value), verdict if current > 0 else None
     )
-v2.metric("Current price", f"${current:,.2f}" if current > 0 else "—")
+v2.metric("Current price", _price(current) if current > 0 else "—")
 v3.metric(
     "Implied upside",
     f"{upside * 100:+.1f}%" if upside is not None else "—",
@@ -583,14 +595,14 @@ fcf_fig.add_bar(
     y=fcfs,
     name="Undiscounted FCF",
     marker_color="#1f3a5f",
-    hovertemplate="%{x}<br>FCF: $%{y:,.0f}<extra></extra>",
+    hovertemplate="%{x}<br>FCF: " + _PREFIX + "%{y:,.0f}<extra></extra>",
 )
 fcf_fig.add_bar(
     x=years,
     y=pv_fcfs,
     name="Present value",
     marker_color="#3b82f6",
-    hovertemplate="%{x}<br>PV: $%{y:,.0f}<extra></extra>",
+    hovertemplate="%{x}<br>PV: " + _PREFIX + "%{y:,.0f}<extra></extra>",
 )
 fcf_fig.update_layout(
     barmode="overlay",
@@ -617,7 +629,7 @@ if valuation.implied is not None:
     implied = valuation.implied.rate
 
     r1, r2, r3 = st.columns(3)
-    r1.metric("Current price", f"${company.current_price:,.2f}")
+    r1.metric("Current price", _price(company.current_price))
     if implied is None:
         r2.metric("Implied revenue growth", "—")
         r3.metric("Your assumption", f"{revenue_growth:.1f}%")
@@ -676,7 +688,7 @@ heatmap_z = np.array(valuation.sensitivity.fair_value)
 text = np.where(
     np.isnan(heatmap_z),
     "—",
-    np.vectorize(lambda v: f"${v:,.0f}" if not np.isnan(v) else "—")(heatmap_z),
+    np.vectorize(lambda v: f"{_PREFIX}{v:,.0f}" if not np.isnan(v) else "—")(heatmap_z),
 )
 
 heatmap = go.Figure(
