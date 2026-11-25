@@ -102,6 +102,11 @@ class CompanyData:
     # supplied it. Only the share count differs; the price is still Yahoo's.
     shares_fallback: Optional[str] = None
 
+    # Cash Yahoo did not report stays None -- unknown, not zero -- while
+    # net_debt counts it as zero. Last, with a default, so existing
+    # constructors keep working; find_caveats reports CASH_UNREPORTED.
+    total_cash: Optional[float] = None
+
 
 class Fundamentals(Protocol):
     """The slice of yfinance.Ticker we depend on: what a market-data source
@@ -202,8 +207,9 @@ def build_company_data(symbol: str, tk: Fundamentals) -> CompanyData:
         # Debt Yahoo did not report stays None on the CompanyData -- it is
         # unknown, not zero -- but net_debt has to be a number, so it counts
         # as zero there and the valuation run reports a DEBT_UNREPORTED caveat.
+        # Cash works the same way, with CASH_UNREPORTED.
         total_debt = _coerce_float(info.get("totalDebt"))
-        total_cash = _coerce_float(info.get("totalCash"), default=0.0)
+        total_cash = _coerce_float(info.get("totalCash"))
 
     net_debt = (total_debt or 0.0) - (total_cash or 0.0)
 
@@ -221,6 +227,7 @@ def build_company_data(symbol: str, tk: Fundamentals) -> CompanyData:
         beta=_coerce_float(info.get("beta")),
         market_cap=_coerce_float(info.get("marketCap")),
         total_debt=total_debt,
+        total_cash=total_cash,
         interest_expense=_interest_expense(financials),
         historical_revenue_growth=hist["revenue_growth"],
         historical_operating_margin=hist["operating_margin"],

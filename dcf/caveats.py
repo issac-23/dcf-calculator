@@ -29,6 +29,7 @@ class CaveatKind(Enum):
     DEFAULT_CLAMPED = "default_clamped"
     NO_IMPLIED_GROWTH = "no_implied_growth"
     DEBT_UNREPORTED = "debt_unreported"
+    CASH_UNREPORTED = "cash_unreported"
     NEGATIVE_MARGIN = "negative_margin"
     WACC_NOT_DERIVED = "wacc_not_derived"
     DEBT_COST_UNKNOWN = "debt_cost_unknown"
@@ -65,6 +66,8 @@ def find_caveats(
         found.append(Caveat(CaveatKind.NO_IMPLIED_GROWTH))
     if company.total_debt is None:
         found.append(Caveat(CaveatKind.DEBT_UNREPORTED))
+    if company.total_cash is None:
+        found.append(Caveat(CaveatKind.CASH_UNREPORTED))
     margin = company.historical_operating_margin
     if margin is not None and margin < 0:
         found.append(Caveat(CaveatKind.NEGATIVE_MARGIN))
