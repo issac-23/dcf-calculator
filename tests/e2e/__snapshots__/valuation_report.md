@@ -24,3 +24,4 @@ To change this file, re-record the fixtures (`python tests/e2e/record.py`) and r
 ## Not valued
 
 - **KRTX**: Could not find revenue data for 'KRTX'. Yahoo may not have financials for this ticker.
+- **TSM**: 'TSM' reports its financials in TWD but its price is quoted in USD. This tool doesn't convert currencies, so it can't value this ticker.
