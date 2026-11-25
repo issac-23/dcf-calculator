@@ -31,7 +31,9 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from dcf.caveats import CaveatKind
+from dcf.assumptions import ASSUMPTIONS, seed_inputs, seeded_wacc_pct
 from dcf.data import FALLBACK_RISK_FREE_RATE, DataFetchError, build_company_data
+from dcf.valuation import run_valuation
 
 from tests.e2e import replay, report
 
@@ -133,6 +135,53 @@ def test_a_stable_company_values_near_its_market_price_and_the_page_renders():
                     "Sensitivity analysis", "Cost of capital"):
         assert section in text, f"{section!r} missing from the rendered page"
     assert len(at.dataframe) == 1, "projection table did not render"
+
+    # The person then plays with the discount rate. The WACC slider opens on
+    # CAPM, which depends on the equity risk premium, so it follows ERP until
+    # they touch it, and keeps their number once they have.
+    company = at.session_state["company"]
+
+    def seeded_wacc(erp_pct: float) -> float:
+        return seeded_wacc_pct(seed_inputs(company, report.E2E_RISK_FREE, erp_pct / 100).wacc)
+
+    def slider(label: str):
+        return next(s for s in at.slider if s.label == label)
+
+    def wacc_caption() -> str:
+        return next(c.value for c in at.caption if c.value.startswith("Weighted average"))
+
+    slider("Equity risk premium").set_value(6.0).run()
+    assert not at.exception, exceptions(at)
+    assert slider("WACC (discount rate)").value == pytest.approx(seeded_wacc(6.0)), (
+        "an untouched WACC slider should keep following the premium"
+    )
+    assert "matches the slider" in wacc_caption()
+
+    slider("WACC (discount rate)").set_value(12.0).run()
+    slider("Equity risk premium").set_value(4.5).run()
+    assert not at.exception, exceptions(at)
+    assert slider("WACC (discount rate)").value == 12.0, (
+        "moving the premium threw away the WACC the person chose"
+    )
+    expected = run_valuation(
+        company, report.E2E_RISK_FREE, {"erp": 4.5, "wacc": 12.0}
+    ).result.fair_value_per_share
+    shown = next(m.value for m in at.metric if m.label == "Fair value / share")
+    assert shown == f"${expected:,.2f}", "the valuation did not use the 12% WACC"
+    assert "overridden it to 12.00%" in wacc_caption()
+    assert "matches the slider" not in wacc_caption()
+
+    # A different company starts again from its own seeds, whatever was
+    # dragged for the last one.
+    at.text_input[0].set_value("AAPL")
+    at.button[0].click().run()
+    assert not at.exception, exceptions(at)
+    company = at.session_state["company"]
+    assert company.ticker == "AAPL"
+    assert slider("WACC (discount rate)").value == pytest.approx(
+        seeded_wacc(ASSUMPTIONS["erp"].fallback)
+    )
+    assert_page_shows_the_reports_fair_value(at, "AAPL")
 
 
 def test_typing_a_ticker_and_clicking_load_gets_you_a_valuation():
