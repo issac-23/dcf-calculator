@@ -60,3 +60,7 @@ below. That's CAPM showing through, not a fact about the businesses.
 [LIMITATIONS.md](LIMITATIONS.md) has the measurements, including the companies
 this model can't value at all. Worth reading before you trust a number it
 gives you.
+
+This is a learning tool, not investment advice. Its "undervalued" and
+"overvalued" verdicts are what one model says under one set of assumptions,
+not a recommendation to buy or sell.
