@@ -189,6 +189,24 @@ def test_a_stable_company_values_near_its_market_price_and_the_page_renders():
     )
     assert_page_shows_the_reports_fair_value(at, "AAPL")
 
+    # A company that reports and trades in yen is valued the same way, and the
+    # page says yen rather than dollars. Toyota's price, fair value and
+    # enterprise value all carry the code, and a US ticker still carries "$".
+    at.text_input[0].set_value("7203.T")
+    at.button[0].click().run()
+    assert not at.exception, exceptions(at)
+    company = at.session_state["company"]
+    assert company.currency == "JPY"
+    expected = report.evaluate("7203.T").valuation.result.fair_value_per_share
+    money = {m.label: m.value for m in at.metric}
+    assert money["Fair value / share"] == f"JPY {expected:,.2f}"
+    assert money["Current price"] == f"JPY {company.current_price:,.2f}"
+    for label in ("Enterprise value", "Equity value", "Net debt"):
+        assert money[label].startswith(("JPY ", "-JPY ")), (label, money[label])
+    assert "$" not in " ".join(
+        v for k, v in money.items() if k not in ("Implied upside",)
+    ), money
+
 
 def test_typing_a_ticker_and_clicking_load_gets_you_a_valuation():
     """The same journey as above, with the ticker typed the way people type it.
@@ -435,6 +453,8 @@ def test_yahoo_not_answering_for_company_info_keeps_the_valuation_or_says_so(
     shown_price = next(m.value for m in at.metric if m.label == "Current price")
     assert shown_price == f"${last_close:,.2f}"
     assert company.name == "AAPL" and company.sector == "" and company.beta is None
+    # The fallback has no currency code, so it keeps the dollar sign.
+    assert company.currency is None
 
     caveats = [c.kind for c in report_caveats(at)]
     assert caveats.count(CaveatKind.QUOTE_FALLBACK) == 1

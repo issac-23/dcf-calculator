@@ -16,6 +16,7 @@ from typing import List, Optional
 from dcf.assumptions import ASSUMPTIONS
 from dcf.caveats import Caveat, CaveatKind
 from dcf.data import CompanyData, DataFetchError, build_company_data
+from dcf.money import currency_prefix
 from dcf.market import fetch_risk_free_rate
 from dcf.valuation import Valuation, run_valuation
 from dcf.wacc import DEFAULT_EQUITY_RISK_PREMIUM
@@ -67,8 +68,8 @@ def _pct(x: Optional[float], digits: int = 1) -> str:
     return "—" if x is None else f"{x:.{digits}f}%"
 
 
-def _money(x: Optional[float]) -> str:
-    return "—" if x is None else f"${x:,.2f}"
+def _money(x: Optional[float], currency: Optional[str] = None) -> str:
+    return "—" if x is None else f"{currency_prefix(currency)}{x:,.2f}"
 
 
 def _say(caveat: Caveat) -> str:
@@ -192,8 +193,8 @@ def render(rows: List[TickerResult]) -> str:
         tv_share = None if v.tv_share is None else v.tv_share * 100
         out.append(
             f"| {r.symbol} | {r.recorded_at} | {beta} | {wacc} | {hist} | "
-            f"{_money(company.current_price)} | "
-            f"{'not meaningful' if v.verdict == 'not_meaningful' else _money(v.result.fair_value_per_share)} | "
+            f"{_money(company.current_price, company.currency)} | "
+            f"{'not meaningful' if v.verdict == 'not_meaningful' else _money(v.result.fair_value_per_share, company.currency)} | "
             f"{_pct(gap)} | {_pct(tv_share)} | {implied} |"
         )
     out.append("")
