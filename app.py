@@ -8,7 +8,12 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from dcf.assumptions import ASSUMPTIONS, seed_inputs, seeded_wacc_pct
-from dcf.data import CompanyData, DataFetchError, describe_failure
+from dcf.data import (
+    FALLBACK_RISK_FREE_RATE,
+    CompanyData,
+    DataFetchError,
+    describe_failure,
+)
 from dcf.market import (
     fetch_company_data,
     fetch_risk_free_rate,
@@ -90,9 +95,26 @@ def _cached_fetch(ticker: str, source: str) -> CompanyData:
     return fetch_company_data(load_source(), ticker)
 
 
+class _QuoteNotLive(Exception):
+    """The Treasury quote was dead or garbage, so there is nothing to cache."""
+
+
+# Only a live rate is cached. Streamlit does not cache a raised exception, so a
+# dead quote makes the next rerun retry instead of pinning the fallback for an
+# hour.
 @st.cache_data(ttl=3600, show_spinner=False)
-def _cached_risk_free(source: str) -> tuple[float, bool]:
-    return fetch_risk_free_rate(load_source())
+def _cached_live_risk_free(source: str) -> float:
+    rate, is_live = fetch_risk_free_rate(load_source())
+    if not is_live:
+        raise _QuoteNotLive
+    return rate
+
+
+def _risk_free(source: str) -> tuple[float, bool]:
+    try:
+        return _cached_live_risk_free(source), True
+    except _QuoteNotLive:
+        return FALLBACK_RISK_FREE_RATE, False
 
 
 def _format_money(x: float) -> str:
@@ -167,7 +189,7 @@ with st.sidebar:
 
     # Defaults and bounds both come from dcf/assumptions.py, so this page and
     # the E2E valuation report start from the same inputs by construction.
-    risk_free, rf_is_live = _cached_risk_free(source_spec())
+    risk_free, rf_is_live = _risk_free(source_spec())
     seed = seed_inputs(company, risk_free, ASSUMPTIONS["erp"].fallback / 100)
     seeded = seed.inputs
 
