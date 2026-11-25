@@ -26,6 +26,7 @@ re-recording moves the snapshot without breaking the suite.
 from __future__ import annotations
 
 import os
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -229,6 +230,33 @@ def test_a_volatile_company_is_discounted_far_below_market_and_says_why():
     assert_page_shows_the_verdict(at, "overvalued")
     assert "Reverse DCF" in page_text(at)
     assert "pp above" in page_text(at), "the page should say the market is the optimist"
+
+    # Then the person drags the margin to the floor: the model stops giving a
+    # number at all, instead of calling a negative value "overvalued". Sliders
+    # are found by label; their keys are not stable here.
+    kinds = [c.kind for c in v.caveats]
+    assert CaveatKind.NEGATIVE_EQUITY not in kinds, "AAPL opens on a positive value"
+    next(s for s in at.slider if s.label == "Operating margin").set_value(-20.0).run()
+    assert not at.exception, exceptions(at)
+
+    tile = next(m for m in at.metric if m.label == "Fair value / share")
+    assert tile.value == "Not meaningful"
+    assert not tile.delta, f"no verdict delta on a meaningless value, got {tile.delta!r}"
+    upside = next(m for m in at.metric if m.label == "Implied upside")
+    assert upside.value == "—"
+    warnings = " ".join(w.value for w in at.warning)
+    assert "Equity value is zero or negative" in warnings
+    assert "final projection year is negative" in warnings
+
+    # The same company with no quote still reports the value as meaningless
+    # rather than as a missing price.
+    unpriced = run_valuation(
+        replace(build_company("AAPL"), current_price=None),
+        report.E2E_RISK_FREE,
+        {"operating_margin": -20.0},
+    )
+    assert unpriced.verdict == "not_meaningful"
+    assert unpriced.upside is None
 
 
 def test_a_price_the_model_cannot_reach_reports_nothing_rather_than_guessing():
