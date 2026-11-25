@@ -389,6 +389,10 @@ v3.metric(
     "Implied upside",
     f"{upside * 100:+.1f}%" if upside is not None else "—",
 )
+st.caption(
+    "A model's output from public data and your assumptions, not investment "
+    "advice or a price target."
+)
 
 e1, e2, e3 = st.columns(3)
 e1.metric("Enterprise value", _format_money(result.enterprise_value))

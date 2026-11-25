@@ -136,6 +136,9 @@ def test_a_stable_company_values_near_its_market_price_and_the_page_renders():
                     "Sensitivity analysis", "Cost of capital"):
         assert section in text, f"{section!r} missing from the rendered page"
     assert len(at.dataframe) == 1, "projection table did not render"
+    assert any("not investment advice" in c.value for c in at.caption), (
+        "the verdict needs its not-investment-advice note"
+    )
 
     # The person then plays with the discount rate. The WACC slider opens on
     # CAPM, which depends on the equity risk premium, so it follows ERP until
