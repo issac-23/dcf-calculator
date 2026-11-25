@@ -8,11 +8,19 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from dcf.assumptions import ASSUMPTIONS, seed_inputs, seeded_wacc_pct
-from dcf.data import CompanyData, DataFetchError, describe_failure
+from dcf.data import (
+    FALLBACK_RISK_FREE_RATE,
+    CompanyData,
+    DataFetchError,
+    describe_failure,
+)
 from dcf.market import (
     fetch_company_data,
     fetch_risk_free_rate,
+    forget_dead_quote,
     load_source,
+    quote_is_known_dead,
+    remember_dead_quote,
     source_spec,
 )
 from dcf.caveats import Caveat, CaveatKind
@@ -90,9 +98,31 @@ def _cached_fetch(ticker: str, source: str) -> CompanyData:
     return fetch_company_data(load_source(), ticker)
 
 
+class _QuoteNotLive(Exception):
+    """The Treasury quote was dead or garbage, so there is nothing to cache."""
+
+
+# Only a live rate is cached. Streamlit does not cache a raised exception, so a
+# dead quote makes the next rerun retry instead of pinning the fallback for an
+# hour.
 @st.cache_data(ttl=3600, show_spinner=False)
-def _cached_risk_free(source: str) -> tuple[float, bool]:
-    return fetch_risk_free_rate(load_source())
+def _cached_live_risk_free(source: str) -> float:
+    rate, is_live = fetch_risk_free_rate(load_source())
+    if not is_live:
+        raise _QuoteNotLive
+    return rate
+
+
+def _risk_free(source: str) -> tuple[float, bool]:
+    if quote_is_known_dead(source):
+        return FALLBACK_RISK_FREE_RATE, False
+    try:
+        rate = _cached_live_risk_free(source)
+    except _QuoteNotLive:
+        remember_dead_quote(source)
+        return FALLBACK_RISK_FREE_RATE, False
+    forget_dead_quote(source)
+    return rate, True
 
 
 def _format_money(x: float) -> str:
@@ -167,7 +197,7 @@ with st.sidebar:
 
     # Defaults and bounds both come from dcf/assumptions.py, so this page and
     # the E2E valuation report start from the same inputs by construction.
-    risk_free, rf_is_live = _cached_risk_free(source_spec())
+    risk_free, rf_is_live = _risk_free(source_spec())
     seed = seed_inputs(company, risk_free, ASSUMPTIONS["erp"].fallback / 100)
     seeded = seed.inputs
 
@@ -303,7 +333,19 @@ def _say(caveat: Caveat) -> str:
     if kind is CaveatKind.NEGATIVE_MARGIN:
         return (
             "Historical operating margin is negative. "
-            "The DCF will return a negative fair value unless you adjust margin assumptions."
+            "Unless you adjust the margin assumption, the valuation may come out not meaningful."
+        )
+    if kind is CaveatKind.NEGATIVE_TERMINAL_FCF:
+        return (
+            "Free cash flow in the final projection year is negative, so the "
+            "terminal value is negative and drags the whole valuation down. "
+            "Check margin, capex and D&A."
+        )
+    if kind is CaveatKind.NEGATIVE_EQUITY:
+        return (
+            "Equity value is zero or negative under these assumptions, so a "
+            "value per share and an upside against the price are not "
+            "meaningful. Check margin, capex, D&A and net debt."
         )
     if kind is CaveatKind.WACC_NOT_DERIVED:
         return (
@@ -367,6 +409,8 @@ for kind in (
     CaveatKind.CASH_UNREPORTED,
     CaveatKind.WRONG_SECTOR,
     CaveatKind.NEGATIVE_MARGIN,
+    CaveatKind.NEGATIVE_TERMINAL_FCF,
+    CaveatKind.NEGATIVE_EQUITY,
 ):
     for caveat in valuation.caveats_of(kind):
         st.warning(_say(caveat))
@@ -386,15 +430,26 @@ elif valuation.verdict == "overvalued":
     verdict = f"▼ {abs(upside) * 100:.1f}% overvalued"
 elif valuation.verdict == "fair":
     verdict = f"≈ Fairly valued ({upside * 100:+.1f}%)"
+elif valuation.verdict == "not_meaningful":
+    verdict = None
 else:
     verdict = "Current price unavailable"
 
 v1, v2, v3 = st.columns(3)
-v1.metric("Fair value / share", f"${fair_value:,.2f}", verdict if current > 0 else None)
+if valuation.verdict == "not_meaningful":
+    v1.metric("Fair value / share", "Not meaningful")
+else:
+    v1.metric(
+        "Fair value / share", f"${fair_value:,.2f}", verdict if current > 0 else None
+    )
 v2.metric("Current price", f"${current:,.2f}" if current > 0 else "—")
 v3.metric(
     "Implied upside",
     f"{upside * 100:+.1f}%" if upside is not None else "—",
+)
+st.caption(
+    "A model's output from public data and your assumptions, not investment "
+    "advice or a price target."
 )
 
 e1, e2, e3 = st.columns(3)

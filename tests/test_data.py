@@ -421,3 +421,14 @@ def test_balance_sheet_fallback_without_a_cash_row_is_none_not_zero():
         _statements_only(_bs(Ordinary_Shares_Number=800.0, Cash_And_Cash_Equivalents=30.0)),
     )
     assert with_cash.total_cash == 30.0
+
+
+# Failure mode from #29: upper-casing the codes makes a price in pence ("GBp")
+# look like statements in pounds ("GBP"), a 100x error. No recorded fixture
+# has a minor-unit currency, so this case lives here.
+@pytest.mark.parametrize("trading, reporting", [("GBp", "GBP"), ("ZAc", "ZAR"), ("ILA", "ILS")])
+def test_a_price_in_minor_units_is_refused_not_valued(trading, reporting):
+    fix = _full_fixture()
+    fix.info = {**fix.info, "currency": trading, "financialCurrency": reporting}
+    with pytest.raises(DataFetchError, match=reporting):
+        build_company_data("TEST", fix)

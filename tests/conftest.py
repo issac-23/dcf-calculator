@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 import streamlit as st
 
+from dcf import market
 from dcf.market import SOURCE_ENV_VAR
 from tests.offline_guard import network_guard  # noqa: F401  (autouse)
 
@@ -20,5 +21,6 @@ def offline(monkeypatch):
     """
     monkeypatch.setenv(SOURCE_ENV_VAR, "tests.e2e.replay:recorded_source")
     st.cache_data.clear()
+    market._dead_quote_since.clear()
     yield
     st.cache_data.clear()

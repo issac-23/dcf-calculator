@@ -161,6 +161,11 @@ class EmptyInfoTicker(RecordedTicker):
         pass
 
 
+# How many times the recorded Treasury quote has been requested; a journey
+# reads it to prove a dead quote is not refetched on every rerun.
+treasury_fetches = 0
+
+
 class RecordedSource:
     """The recorded `dcf.market.MarketDataSource`: no network, ever."""
 
@@ -186,6 +191,8 @@ class RecordedSource:
         return tk
 
     def treasury_history(self) -> pd.DataFrame:
+        global treasury_fetches
+        treasury_fetches += 1
         if isinstance(self._treasury_close, Exception):
             raise self._treasury_close
         return pd.DataFrame({"Close": list(self._treasury_close)})
