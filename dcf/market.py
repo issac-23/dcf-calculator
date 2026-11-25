@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import importlib
 import os
+import time
 from typing import Protocol
 
 import pandas as pd
@@ -35,6 +36,29 @@ from dcf.data import (
 )
 
 SOURCE_ENV_VAR = "DCF_MARKET_SOURCE"
+
+# A dead Treasury quote is not cached (the fallback must not outlive the
+# outage), but refetching it on every rerun makes every slider drag wait on a
+# failing request. So the failure is remembered briefly, per source. It lives
+# here, not in app.py, because Streamlit re-executes app.py on every rerun and
+# a dict there would start empty each time; a module imported once is shared by
+# every session in the server process.
+_RETRY_DEAD_QUOTE_AFTER_S = 60
+_dead_quote_since: dict[str, float] = {}
+_clock = time.monotonic
+
+
+def quote_is_known_dead(source: str) -> bool:
+    since = _dead_quote_since.get(source)
+    return since is not None and _clock() - since < _RETRY_DEAD_QUOTE_AFTER_S
+
+
+def remember_dead_quote(source: str) -> None:
+    _dead_quote_since[source] = _clock()
+
+
+def forget_dead_quote(source: str) -> None:
+    _dead_quote_since.pop(source, None)
 
 # The 10-year Treasury is the conventional risk-free proxy for a US equity
 # DCF: long enough to match the horizon of a perpetuity, liquid enough to
