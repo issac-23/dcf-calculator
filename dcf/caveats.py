@@ -30,6 +30,8 @@ class CaveatKind(Enum):
     NO_IMPLIED_GROWTH = "no_implied_growth"
     DEBT_UNREPORTED = "debt_unreported"
     NEGATIVE_MARGIN = "negative_margin"
+    NEGATIVE_TERMINAL_FCF = "negative_terminal_fcf"
+    NEGATIVE_EQUITY = "negative_equity"
     WACC_NOT_DERIVED = "wacc_not_derived"
     DEBT_COST_UNKNOWN = "debt_cost_unknown"
 
@@ -50,8 +52,14 @@ def find_caveats(
     wacc_reason: Optional[str],
     clamped: Iterable[str],
     implied_found: Optional[bool],
+    final_fcf: Optional[float] = None,
+    equity_value: Optional[float] = None,
 ) -> tuple[Caveat, ...]:
-    """`implied_found` is None when there was no price to solve against."""
+    """`implied_found` is None when there was no price to solve against.
+
+    `final_fcf` and `equity_value` come from the DCF run; left None, the
+    findings that depend on them are skipped.
+    """
     found = []
     if company.quote_fallback:
         found.append(Caveat(CaveatKind.QUOTE_FALLBACK, company.quote_fallback))
@@ -68,6 +76,10 @@ def find_caveats(
     margin = company.historical_operating_margin
     if margin is not None and margin < 0:
         found.append(Caveat(CaveatKind.NEGATIVE_MARGIN))
+    if final_fcf is not None and final_fcf < 0:
+        found.append(Caveat(CaveatKind.NEGATIVE_TERMINAL_FCF))
+    if equity_value is not None and equity_value <= 0:
+        found.append(Caveat(CaveatKind.NEGATIVE_EQUITY))
     if wacc is None:
         found.append(Caveat(CaveatKind.WACC_NOT_DERIVED, wacc_reason or ""))
     elif wacc.debt_cost_unknown:

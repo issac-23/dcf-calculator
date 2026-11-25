@@ -111,8 +111,18 @@ def _say(caveat: Caveat) -> str:
         )
     if kind is CaveatKind.NEGATIVE_MARGIN:
         return (
-            ": historical operating margin is negative, so the DCF returns a "
-            "negative fair value unless the margin assumption is adjusted."
+            ": historical operating margin is negative, so the valuation may come "
+            "out not meaningful unless the margin assumption is adjusted."
+        )
+    if kind is CaveatKind.NEGATIVE_TERMINAL_FCF:
+        return (
+            ": free cash flow in the final projection year is negative, so "
+            "the terminal value is negative and drives the answer."
+        )
+    if kind is CaveatKind.NEGATIVE_EQUITY:
+        return (
+            ": equity value is zero or negative, so the value per share and "
+            "the gap to market are not meaningful."
         )
     if kind is CaveatKind.WACC_NOT_DERIVED:
         return f": WACC could not be derived, so the generic default is used. {caveat.subject}"
@@ -176,7 +186,8 @@ def render(rows: List[TickerResult]) -> str:
         tv_share = None if v.tv_share is None else v.tv_share * 100
         out.append(
             f"| {r.symbol} | {r.recorded_at} | {beta} | {wacc} | {hist} | "
-            f"{_money(company.current_price)} | {_money(v.result.fair_value_per_share)} | "
+            f"{_money(company.current_price)} | "
+            f"{'not meaningful' if v.verdict == 'not_meaningful' else _money(v.result.fair_value_per_share)} | "
             f"{_pct(gap)} | {_pct(tv_share)} | {implied} |"
         )
     out.append("")
