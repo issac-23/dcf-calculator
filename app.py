@@ -172,6 +172,9 @@ with st.sidebar:
     seeded = seed.inputs
 
     values: dict[str, float] = {}
+    # Every slider restarts from its seed when a different company is loaded.
+    new_company = st.session_state.get("seeded_for") != company.ticker
+    st.session_state["seeded_for"] = company.ticker
 
     def _slider(key: str, default: float, seeded_from_data: bool = True) -> float:
         spec = ASSUMPTIONS[key]
@@ -179,8 +182,23 @@ with st.sidebar:
         help_text = spec.help if seeded_from_data else spec.help_unseeded
         if help_text:
             kwargs["help"] = help_text
+        # The slider keeps one widget identity (its key) and the seed is
+        # written into session state, instead of being passed as a default
+        # that changes under the widget -- Streamlit treats a changed default
+        # as a new widget and drops the person's value.
+        widget_key = f"slider_{key}"
+        seeded_key = f"seeded_{key}"
+        if (
+            new_company
+            or widget_key not in st.session_state
+            or st.session_state[widget_key] == st.session_state.get(seeded_key)
+        ):
+            # A new company, or a slider the person has not moved off the
+            # last seed: (re)start it from this seed. A moved slider is theirs.
+            st.session_state[widget_key] = default
+        st.session_state[seeded_key] = default
         values[key] = st.slider(
-            spec.label, spec.lo, spec.hi, default, spec.step, **kwargs
+            spec.label, spec.lo, spec.hi, step=spec.step, key=widget_key, **kwargs
         )
         return values[key]
 
