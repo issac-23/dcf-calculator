@@ -372,3 +372,14 @@ def test_partial_info_without_shares_takes_them_from_the_balance_sheet():
     assert data.current_price == 150.0, "the price stays Yahoo's"
     assert data.name == "Test Co." and data.beta == 1.2
     assert data.shares_fallback and data.quote_fallback is None
+
+
+# Failure mode from #29: upper-casing the codes makes a price in pence ("GBp")
+# look like statements in pounds ("GBP"), a 100x error. No recorded fixture
+# has a minor-unit currency, so this case lives here.
+@pytest.mark.parametrize("trading, reporting", [("GBp", "GBP"), ("ZAc", "ZAR"), ("ILA", "ILS")])
+def test_a_price_in_minor_units_is_refused_not_valued(trading, reporting):
+    fix = _full_fixture()
+    fix.info = {**fix.info, "currency": trading, "financialCurrency": reporting}
+    with pytest.raises(DataFetchError, match=reporting):
+        build_company_data("TEST", fix)

@@ -290,7 +290,10 @@ def _balance_sheet_shares(balance_sheet: pd.DataFrame) -> Optional[float]:
 
 
 def _currency_code(value) -> str:
-    return value.strip().upper() if isinstance(value, str) else ""
+    # Case matters: Yahoo quotes London in pence as "GBp" against statements
+    # in "GBP" (and "ZAc" against ZAR, "ILA" against ILS), a factor of 100
+    # that upper-casing would hide.
+    return value.strip() if isinstance(value, str) else ""
 
 
 def _refuse_mixed_currencies(symbol: str, info: dict) -> None:
